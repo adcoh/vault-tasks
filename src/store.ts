@@ -1,13 +1,15 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
+  closeSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
 import type { Config } from "./config.js";
 import { formatId, getNextId } from "./counter.js";
 import { parseFrontmatter, writeFrontmatter } from "./frontmatter.js";
@@ -25,7 +27,7 @@ const KNOWN_META_KEYS = new Set([
 
 function fileToTask(filePath: string, text: string): Task {
   const { meta, body } = parseFrontmatter(text);
-  const name = filePath.split("/").pop() ?? "";
+  const name = basename(filePath) ?? "";
   const stem = name.replace(/\.md$/, "");
   const idMatch = name.match(/^(\d+)-/);
 
@@ -112,29 +114,46 @@ export class TaskStore {
       );
     }
 
-    const id = getNextId(this.config);
-    const idStr = formatId(id, this.config);
-    const slug = slugify(title, this.config.slugMaxLength);
-    const filename = `${idStr}-${slug}.md`;
-    const filePath = join(this.config.backlogDir, filename);
     const today = new Date().toISOString().slice(0, 10);
 
-    const task: Task = {
-      id,
-      title,
-      status: this.config.defaultStatus,
-      priority,
-      tags,
-      created: today,
-      source,
-      body,
-      filePath,
-      slug: `${idStr}-${slug}`,
-      extraMeta: {},
-    };
+    // Retry ID allocation on collision (concurrent task creation)
+    const maxRetries = 3;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const id = getNextId(this.config);
+      const idStr = formatId(id, this.config);
+      const slug = slugify(title, this.config.slugMaxLength);
+      const filename = `${idStr}-${slug}.md`;
+      const filePath = join(this.config.backlogDir, filename);
 
-    writeFileSync(filePath, taskToMarkdown(task), "utf-8");
-    return task;
+      const task: Task = {
+        id,
+        title,
+        status: this.config.defaultStatus,
+        priority,
+        tags,
+        created: today,
+        source,
+        body,
+        filePath,
+        slug: `${idStr}-${slug}`,
+        extraMeta: {},
+      };
+
+      // Exclusive create — fails if file already exists (ID collision)
+      try {
+        const fd = openSync(filePath, "wx");
+        writeFileSync(fd, taskToMarkdown(task), "utf-8");
+        closeSync(fd);
+        return task;
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+          continue; // ID collision, retry with next ID
+        }
+        throw err;
+      }
+    }
+
+    throw new Error("Failed to allocate unique task ID after retries");
   }
 
   loadAll(includeArchived = false): Task[] {
@@ -158,7 +177,7 @@ export class TaskStore {
     const numId = parseInt(identifier, 10);
     if (!isNaN(numId)) {
       const prefix = String(numId).padStart(this.config.padWidth, "0") + "-";
-      const match = files.find((f) => f.split("/").pop()?.startsWith(prefix));
+      const match = files.find((f) => basename(f)?.startsWith(prefix));
       if (match) {
         return fileToTask(match, readFileSync(match, "utf-8"));
       }
@@ -167,7 +186,7 @@ export class TaskStore {
     // Substring match on filename
     const query = identifier.toLowerCase();
     const matches = files.filter((f) => {
-      const name = f.split("/").pop()?.replace(/\.md$/, "") ?? "";
+      const name = basename(f)?.replace(/\.md$/, "") ?? "";
       return name.toLowerCase().includes(query);
     });
 
@@ -178,7 +197,7 @@ export class TaskStore {
       throw new Error(`No task matching '${identifier}'`);
     }
 
-    const names = matches.map((m) => m.split("/").pop());
+    const names = matches.map((m) => basename(m));
     throw new Error(
       `Ambiguous match for '${identifier}':\n${names.map((n) => `  ${n}`).join("\n")}`
     );
@@ -276,8 +295,9 @@ export class TaskStore {
 
       for (const word of words) {
         try {
-          const result = execSync(
-            `git log --since=${task.created} --all --oneline --grep="${word}" -i`,
+          const result = execFileSync(
+            "git",
+            ["log", `--since=${task.created}`, "--all", "--oneline", `--grep=${word}`, "-i"],
             {
               cwd: this.config.vaultRoot,
               encoding: "utf-8",
@@ -334,7 +354,7 @@ export class TaskStore {
 
   private archiveTask(task: Task): void {
     this.ensureArchiveDir();
-    const name = task.filePath.split("/").pop()!;
+    const name = basename(task.filePath);
     const dest = join(this.config.archiveDir, name);
     renameSync(task.filePath, dest);
     task.filePath = dest;

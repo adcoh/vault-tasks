@@ -15,10 +15,12 @@ const __dirname = dirname(__filename);
 function getTemplatesDir(): string {
   // Walk up from dist/commands/ to package root
   let dir = __dirname;
-  while (dir !== "/") {
+  while (true) {
     const candidate = join(dir, "templates");
     if (existsSync(candidate)) return candidate;
-    dir = dirname(dir);
+    const parent = dirname(dir);
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
   }
   throw new Error("Cannot find templates directory. Is the package installed correctly?");
 }

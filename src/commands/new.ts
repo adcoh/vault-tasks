@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import type { Config } from "../config.js";
 import { TaskStore } from "../store.js";
 
@@ -28,14 +28,14 @@ export function cmdNew(
 
   if (args.commit) {
     try {
-      execSync(`git add "${task.filePath}"`, {
+      execFileSync("git", ["add", "--", task.filePath], {
         cwd: config.vaultRoot,
         stdio: "inherit",
       });
-      execSync(
-        `git commit -m "chore: add backlog task — ${task.title}"`,
-        { cwd: config.vaultRoot, stdio: "inherit" }
-      );
+      execFileSync("git", ["commit", "-m", `chore: add backlog task — ${task.title}`], {
+        cwd: config.vaultRoot,
+        stdio: "inherit",
+      });
       console.log("Committed.");
     } catch {
       console.error("Git commit failed.");

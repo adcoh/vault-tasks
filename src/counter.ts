@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Config } from "./config.js";
@@ -28,7 +28,7 @@ function scanMaxId(config: Config): number {
  */
 function getGitCommonDir(cwd: string): string | null {
   try {
-    const result = execSync("git rev-parse --git-common-dir", {
+    const result = execFileSync("git", ["rev-parse", "--git-common-dir"], {
       cwd,
       encoding: "utf-8",
       timeout: 5000,
