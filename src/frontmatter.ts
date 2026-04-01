@@ -45,9 +45,9 @@ export function parseFrontmatter(
       currentKey = kvMatch[1];
       const value = kvMatch[2].trim();
 
-      // Inline list: [tag1, tag2]
+      // Inline list: [tag1, tag2] — but not wikilinks [[like this]]
       const inlineList = value.match(/^\[(.+)\]$/);
-      if (inlineList) {
+      if (inlineList && !value.startsWith("[[")) {
         const items = inlineList[1].split(",").map((v) => v.trim().replace(/^["']|["']$/g, ""));
         meta[currentKey] = items;
         currentList = items;
