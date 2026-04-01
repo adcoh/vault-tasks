@@ -10,11 +10,16 @@ export function slugify(title: string, maxLength = 60): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
+  // Fallback for empty or all-special-character titles
+  if (!slug) {
+    return "untitled";
+  }
+
   if (slug.length <= maxLength) {
     return slug;
   }
 
-  // Truncate at word boundary (hyphen)
+  // Truncate at word boundary (hyphen), fall back to hard truncation
   const truncated = slug.slice(0, maxLength);
   const lastHyphen = truncated.lastIndexOf("-");
   if (lastHyphen > 0) {

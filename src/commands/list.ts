@@ -8,15 +8,15 @@ export function cmdList(
     status?: string;
     priority?: string;
     tag?: string;
-    includeDone?: boolean;
+    all?: boolean;
   }
 ): void {
   const store = new TaskStore(config);
-  let tasks = store.loadAll(args.includeDone);
+  let tasks = store.loadAll(args.all);
 
   if (args.status) {
     tasks = tasks.filter((t) => t.status === args.status);
-  } else if (!args.includeDone) {
+  } else if (!args.all) {
     tasks = tasks.filter((t) => t.status === "open" || t.status === "in-progress");
   }
 

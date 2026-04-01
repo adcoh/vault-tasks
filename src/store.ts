@@ -277,9 +277,12 @@ export class TaskStore {
   stale(days = 14): Array<{ task: Task; ageDays: number }> {
     const tasks = this.loadAll();
     const today = new Date();
-    const results: Array<{ task: Task; ageDays: number }> = [];
 
     const openTasks = tasks.filter((t) => t.status === "open");
+
+    // Find the earliest created date among candidates to scope a single git log
+    const candidates: Array<{ task: Task; ageDays: number }> = [];
+    let earliestDate = "";
 
     for (const task of openTasks) {
       if (!task.created) continue;
@@ -288,34 +291,40 @@ export class TaskStore {
         (today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)
       );
       if (age < days) continue;
-
-      // Check git for recent activity mentioning this task
-      const words = task.title.match(/[a-zA-Z]{3,}/g) ?? [];
-      let hasActivity = false;
-
-      for (const word of words) {
-        try {
-          const result = execFileSync(
-            "git",
-            ["log", `--since=${task.created}`, "--all", "--oneline", `--grep=${word}`, "-i"],
-            {
-              cwd: this.config.vaultRoot,
-              encoding: "utf-8",
-              timeout: 10000,
-              stdio: ["pipe", "pipe", "pipe"],
-            }
-          );
-          if (result.trim()) {
-            hasActivity = true;
-            break;
-          }
-        } catch {
-          break;
-        }
+      candidates.push({ task, ageDays: age });
+      if (!earliestDate || task.created < earliestDate) {
+        earliestDate = task.created;
       }
+    }
 
+    if (candidates.length === 0) return [];
+
+    // Fetch git log once, search in-process instead of spawning per-word
+    let gitLog = "";
+    try {
+      gitLog = execFileSync(
+        "git",
+        ["log", `--since=${earliestDate}`, "--all", "--oneline"],
+        {
+          cwd: this.config.vaultRoot,
+          encoding: "utf-8",
+          timeout: 15000,
+          stdio: ["pipe", "pipe", "pipe"],
+        }
+      ).toLowerCase();
+    } catch {
+      // git not available — treat all candidates as stale
+      candidates.sort((a, b) => b.ageDays - a.ageDays);
+      return candidates;
+    }
+
+    const results: Array<{ task: Task; ageDays: number }> = [];
+
+    for (const { task, ageDays } of candidates) {
+      const words = task.title.match(/[a-zA-Z]{3,}/g) ?? [];
+      const hasActivity = words.some((word) => gitLog.includes(word.toLowerCase()));
       if (!hasActivity) {
-        results.push({ task, ageDays: age });
+        results.push({ task, ageDays });
       }
     }
 

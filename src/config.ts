@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 export interface Config {
@@ -55,11 +55,8 @@ export function findConfigFile(startDir: string = process.cwd()): string | null 
 
   while (true) {
     const candidate = join(dir, CONFIG_FILENAME);
-    try {
-      readFileSync(candidate);
+    if (existsSync(candidate)) {
       return candidate;
-    } catch {
-      // not found, walk up
     }
 
     const parent = dirname(dir);
@@ -73,6 +70,9 @@ export function findConfigFile(startDir: string = process.cwd()): string | null 
 /**
  * Minimal TOML parser for the subset we use.
  * Handles: string values, arrays of strings, nested tables via [section.subsection].
+ *
+ * Limitations: does not handle escaped quotes within strings (e.g. "path with \"quotes\"").
+ * This is acceptable for a config file with a known, simple schema.
  */
 export function parseToml(text: string): Record<string, unknown> {
   const result: Record<string, unknown> = {};

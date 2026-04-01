@@ -46,6 +46,11 @@ function getGitCommonDir(cwd: string): string | null {
  * Uses a simple JSON counter file in the git common dir (shared across worktrees).
  * Falls back to file scanning if git is not available.
  * Always cross-checks against files to prevent collisions.
+ *
+ * Note: A race condition exists between reading and writing the counter file.
+ * Two concurrent processes could get the same ID. This is handled safely by
+ * TaskStore.create(), which uses exclusive file creation (wx flag) with retry
+ * to detect and recover from collisions.
  */
 function getNextSequentialId(config: Config): number {
   const fileMax = scanMaxId(config);

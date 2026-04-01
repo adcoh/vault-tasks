@@ -4,10 +4,10 @@ import { TaskStore } from "../store.js";
 
 export function cmdSearch(
   config: Config,
-  args: { keyword: string; includeArchived?: boolean }
+  args: { keyword: string; all?: boolean }
 ): void {
   const store = new TaskStore(config);
-  const matches = store.search(args.keyword, args.includeArchived);
+  const matches = store.search(args.keyword, args.all);
 
   if (matches.length === 0) {
     console.log(`No tasks matching '${args.keyword}'.`);

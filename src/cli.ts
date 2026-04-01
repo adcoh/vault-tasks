@@ -39,10 +39,8 @@ Options (vary by command):
   --commit              Git commit after creating
   --status              Filter or set status
   --tag                 Filter by tag
-  --include-done, -a    Include done/wont-do tasks
-  --include-archived    Include archived tasks in search
+  --all, -a             Include done/archived tasks
   --days, -d            Stale threshold in days (default: 14)
-  --all                 Install all skills
   --list                List available skills
   --update              Overwrite existing skill files
 `;
@@ -71,7 +69,7 @@ function parseArgs(argv: string[]): { command: string; args: Record<string, stri
         p: "priority",
         t: "tags",
         s: "source",
-        a: "include-done",
+        a: "all",
         d: "days",
       };
       const key = short[arg[1]] ?? arg[1];
@@ -143,19 +141,19 @@ function main(): void {
           status: args["status"] as string | undefined,
           priority: args["priority"] as string | undefined,
           tag: args["tag"] as string | undefined,
-          includeDone: args["include-done"] === true,
+          all: args["all"] === true,
         });
         break;
 
       case "search":
         if (!positional[0]) {
-          console.error("Usage: vt search <keyword> [--include-archived]");
+          console.error("Usage: vt search <keyword> [--all]");
           process.exitCode = 1;
           return;
         }
         cmdSearch(config, {
           keyword: positional[0],
-          includeArchived: args["include-archived"] === true,
+          all: args["all"] === true,
         });
         break;
 

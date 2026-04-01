@@ -31,4 +31,18 @@ describe("slugify", () => {
   it("strips leading and trailing hyphens", () => {
     assert.equal(slugify("  -hello-  "), "hello");
   });
+
+  it("returns 'untitled' for empty string", () => {
+    assert.equal(slugify(""), "untitled");
+  });
+
+  it("returns 'untitled' for all-special-character title", () => {
+    assert.equal(slugify("!@#$%^&*()"), "untitled");
+  });
+
+  it("hard-truncates single long word", () => {
+    const result = slugify("supercalifragilisticexpialidocious", 10);
+    assert.equal(result.length, 10);
+    assert.equal(result, "supercalif");
+  });
 });
