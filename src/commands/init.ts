@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { generateDefaultConfig } from "../config.js";
 
@@ -18,6 +18,19 @@ export function cmdInit(args: { dir?: string }): void {
   if (!existsSync(backlogDir)) {
     mkdirSync(backlogDir, { recursive: true });
     console.log(`Created: 50-backlog/`);
+  }
+
+  // Ensure .vault-tasks-counter.json is gitignored
+  const gitignorePath = join(root, ".gitignore");
+  if (existsSync(gitignorePath)) {
+    const content = readFileSync(gitignorePath, "utf-8");
+    if (!content.includes(".vault-tasks-counter.json")) {
+      writeFileSync(gitignorePath, content.trimEnd() + "\n.vault-tasks-counter.json\n", "utf-8");
+      console.log("Updated: .gitignore (added .vault-tasks-counter.json)");
+    }
+  } else {
+    writeFileSync(gitignorePath, ".vault-tasks-counter.json\n", "utf-8");
+    console.log("Created: .gitignore");
   }
 
   console.log("\nvault-tasks initialized. Create your first task with:");

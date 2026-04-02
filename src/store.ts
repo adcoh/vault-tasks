@@ -50,12 +50,12 @@ function fileToTask(filePath: string, text: string): Task {
 
   return {
     id: idMatch ? parseInt(idMatch[1], 10) : 0,
-    title: (meta["title"] as string) ?? stem,
-    status: (meta["status"] as string) ?? "open",
-    priority: (meta["priority"] as string) ?? "medium",
+    title: String(meta["title"] ?? "") || stem,
+    status: String(meta["status"] ?? "") || "open",
+    priority: String(meta["priority"] ?? "") || "medium",
     tags,
-    created: (meta["created"] as string) ?? "",
-    source: (meta["source"] as string) ?? "",
+    created: String(meta["created"] ?? "") || "",
+    source: String(meta["source"] ?? "") || "",
     body,
     filePath,
     slug: stem,
@@ -65,13 +65,13 @@ function fileToTask(filePath: string, text: string): Task {
 
 function taskToMarkdown(task: Task): string {
   const meta: Record<string, unknown> = {
+    ...task.extraMeta,
     title: task.title,
     status: task.status,
     priority: task.priority,
     tags: task.tags,
     created: task.created,
     source: task.source,
-    ...task.extraMeta,
   };
   return writeFrontmatter(meta, task.body);
 }
@@ -80,21 +80,17 @@ export class TaskStore {
   constructor(public readonly config: Config) {}
 
   private ensureBacklogDir(): void {
-    if (!existsSync(this.config.backlogDir)) {
-      mkdirSync(this.config.backlogDir, { recursive: true });
-    }
+    mkdirSync(this.config.backlogDir, { recursive: true });
   }
 
   private ensureArchiveDir(): void {
-    if (!existsSync(this.config.archiveDir)) {
-      mkdirSync(this.config.archiveDir, { recursive: true });
-    }
+    mkdirSync(this.config.archiveDir, { recursive: true });
   }
 
   private listMdFiles(dir: string): string[] {
     if (!existsSync(dir)) return [];
     return readdirSync(dir)
-      .filter((f) => f.endsWith(".md"))
+      .filter((f) => /^\d+-.*\.md$/.test(f))
       .sort()
       .map((f) => join(dir, f));
   }
@@ -169,9 +165,8 @@ export class TaskStore {
     return tasks;
   }
 
-  find(identifier: string): Task {
-    this.ensureBacklogDir();
-    const files = this.listMdFiles(this.config.backlogDir);
+  private matchInDir(identifier: string, dir: string): Task | null {
+    const files = this.listMdFiles(dir);
 
     // Try numeric ID first
     const numId = parseInt(identifier, 10);
@@ -193,41 +188,43 @@ export class TaskStore {
     if (matches.length === 1) {
       return fileToTask(matches[0], readFileSync(matches[0], "utf-8"));
     }
-    if (matches.length === 0) {
-      throw new Error(`No task matching '${identifier}'`);
-    }
-
-    const names = matches.map((m) => basename(m));
-    throw new Error(
-      `Ambiguous match for '${identifier}':\n${names.map((n) => `  ${n}`).join("\n")}`
-    );
-  }
-
-  setStatus(identifier: string, newStatus: string): Task {
-    if (!this.config.statuses.includes(newStatus)) {
+    if (matches.length > 1) {
+      const names = matches.map((m) => basename(m));
       throw new Error(
-        `Invalid status: ${newStatus}. Use: ${this.config.statuses.join(", ")}`
+        `Ambiguous match for '${identifier}':\n${names.map((n) => `  ${n}`).join("\n")}`
       );
     }
 
-    const task = this.find(identifier);
-    const oldStatus = task.status;
-    task.status = newStatus;
-    writeFileSync(task.filePath, taskToMarkdown(task), "utf-8");
+    return null;
+  }
 
-    if (
-      this.config.autoArchive &&
-      this.config.archiveStatuses.includes(newStatus)
-    ) {
-      this.archiveTask(task);
+  find(identifier: string): Task {
+    this.ensureBacklogDir();
+
+    // Search backlog first
+    const backlogMatch = this.matchInDir(identifier, this.config.backlogDir);
+    if (backlogMatch) {
+      return backlogMatch;
     }
 
-    return task;
+    // Fallback: search archive
+    const archiveMatch = this.matchInDir(identifier, this.config.archiveDir);
+    if (archiveMatch) {
+      throw new Error(
+        `Task '${identifier}' is archived (in archive/). To modify it, move it back to backlog first.`
+      );
+    }
+
+    throw new Error(`No task matching '${identifier}'`);
+  }
+
+  setStatus(identifier: string, newStatus: string): Task {
+    return this.update(identifier, { status: newStatus });
   }
 
   update(
     identifier: string,
-    fields: { status?: string; priority?: string }
+    fields: { status?: string; priority?: string; tags?: string[] }
   ): Task {
     const task = this.find(identifier);
 
@@ -247,6 +244,10 @@ export class TaskStore {
         );
       }
       task.priority = fields.priority;
+    }
+
+    if (fields.tags !== undefined) {
+      task.tags = fields.tags;
     }
 
     writeFileSync(task.filePath, taskToMarkdown(task), "utf-8");
@@ -285,7 +286,7 @@ export class TaskStore {
     let earliestDate = "";
 
     for (const task of openTasks) {
-      if (!task.created) continue;
+      if (!task.created || !/^\d{4}-\d{2}-\d{2}/.test(task.created)) continue;
       const created = new Date(task.created);
       const age = Math.floor(
         (today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)
@@ -304,7 +305,7 @@ export class TaskStore {
     try {
       gitLog = execFileSync(
         "git",
-        ["log", `--since=${earliestDate}`, "--all", "--oneline"],
+        ["log", `--since=${earliestDate}`, "--all", "--name-only", "--oneline"],
         {
           cwd: this.config.vaultRoot,
           encoding: "utf-8",
@@ -321,8 +322,8 @@ export class TaskStore {
     const results: Array<{ task: Task; ageDays: number }> = [];
 
     for (const { task, ageDays } of candidates) {
-      const words = task.title.match(/[a-zA-Z]{3,}/g) ?? [];
-      const hasActivity = words.some((word) => gitLog.includes(word.toLowerCase()));
+      const slug = basename(task.filePath).replace(/\.md$/, "").toLowerCase();
+      const hasActivity = gitLog.includes(slug);
       if (!hasActivity) {
         results.push({ task, ageDays });
       }
@@ -365,6 +366,9 @@ export class TaskStore {
     this.ensureArchiveDir();
     const name = basename(task.filePath);
     const dest = join(this.config.archiveDir, name);
+    if (existsSync(dest)) {
+      throw new Error(`Archive destination already exists: ${name}. Resolve the conflict manually.`);
+    }
     renameSync(task.filePath, dest);
     task.filePath = dest;
   }

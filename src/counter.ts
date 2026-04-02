@@ -1,6 +1,6 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { randomInt } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Config } from "./config.js";
 
 /**
@@ -15,7 +15,10 @@ function scanMaxId(config: Config): number {
       if (!name.endsWith(".md")) continue;
       const match = name.match(/^(\d+)-/);
       if (match) {
-        maxId = Math.max(maxId, parseInt(match[1], 10));
+        const parsed = parseInt(match[1], 10);
+        if (Number.isSafeInteger(parsed)) {
+          maxId = Math.max(maxId, parsed);
+        }
       }
     }
   }
@@ -24,27 +27,10 @@ function scanMaxId(config: Config): number {
 }
 
 /**
- * Get the path to the shared git common dir (works across worktrees).
- */
-function getGitCommonDir(cwd: string): string | null {
-  try {
-    const result = execFileSync("git", ["rev-parse", "--git-common-dir"], {
-      cwd,
-      encoding: "utf-8",
-      timeout: 5000,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    return resolve(cwd, result.trim());
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Get the next sequential task ID.
  *
- * Uses a simple JSON counter file in the git common dir (shared across worktrees).
- * Falls back to file scanning if git is not available.
+ * Uses a simple JSON counter file in the vault root.
+ * Falls back to file scanning if the counter file is missing or corrupt.
  * Always cross-checks against files to prevent collisions.
  *
  * Note: A race condition exists between reading and writing the counter file.
@@ -54,20 +40,14 @@ function getGitCommonDir(cwd: string): string | null {
  */
 function getNextSequentialId(config: Config): number {
   const fileMax = scanMaxId(config);
-  const gitDir = getGitCommonDir(config.vaultRoot);
-
-  if (!gitDir) {
-    return fileMax + 1;
-  }
-
-  const counterPath = join(gitDir, "vault-tasks-counter.json");
+  const counterPath = join(config.vaultRoot, ".vault-tasks-counter.json");
 
   let storedNext = 0;
   try {
     const data = JSON.parse(readFileSync(counterPath, "utf-8"));
     storedNext = data.nextId ?? 0;
   } catch {
-    // File doesn't exist or is corrupt
+    // File doesn't exist or is corrupt — fall back to file scan
   }
 
   const nextId = Math.max(storedNext, fileMax + 1);
@@ -75,14 +55,14 @@ function getNextSequentialId(config: Config): number {
   try {
     writeFileSync(counterPath, JSON.stringify({ nextId: nextId + 1 }), "utf-8");
   } catch {
-    // Best effort — if we can't write, the file scan fallback will still work
+    // Best effort — file scan fallback will still work
   }
 
   return nextId;
 }
 
 /**
- * Generate a timestamp-based ID: YYYYMMDD-HHMM
+ * Generate a timestamp-based ID: YYYYMMDDHHMMss
  */
 function getTimestampId(): number {
   const now = new Date();
@@ -92,6 +72,7 @@ function getTimestampId(): number {
     String(now.getDate()).padStart(2, "0"),
     String(now.getHours()).padStart(2, "0"),
     String(now.getMinutes()).padStart(2, "0"),
+    String(now.getSeconds()).padStart(2, "0"),
   ];
   return parseInt(parts.join(""), 10);
 }
@@ -99,12 +80,22 @@ function getTimestampId(): number {
 /**
  * Generate a ULID-like sortable ID (simplified: timestamp + random suffix).
  * Not a full ULID spec implementation, but collision-resistant and sortable.
+ * Uses crypto.randomInt() for better randomness and validates safe integer range.
  */
 function getUlidId(): number {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 10000);
-  // Use last 10 digits of timestamp + 4 random digits
-  return parseInt(`${timestamp % 10000000000}${String(random).padStart(4, "0")}`, 10);
+  // Use last 7 digits of timestamp (covers ~115 days) + 6 random digits = 13 digits max.
+  // Number.MAX_SAFE_INTEGER is 9007199254740991 (16 digits), so 13 digits is always safe.
+  // Retry loop guards against any edge case where the result is not a safe integer.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const timestamp = Date.now() % 10000000; // 7 digits
+    const random = randomInt(0, 1000000); // 6 digits: 0–999999
+    const id = parseInt(`${timestamp}${String(random).padStart(6, "0")}`, 10);
+    if (Number.isSafeInteger(id)) {
+      return id;
+    }
+  }
+  // Fallback: should never reach here, but return a safe value if it does
+  return Date.now() % 10000000000;
 }
 
 /**
