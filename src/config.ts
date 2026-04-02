@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 export interface Config {
   vaultRoot: string;
@@ -51,7 +51,6 @@ const CONFIG_FILENAME = ".vault-tasks.toml";
  */
 export function findConfigFile(startDir: string = process.cwd()): string | null {
   let dir = resolve(startDir);
-  const root = dirname(dir) === dir ? dir : "/"; // filesystem root
 
   while (true) {
     const candidate = join(dir, CONFIG_FILENAME);
@@ -71,7 +70,9 @@ export function findConfigFile(startDir: string = process.cwd()): string | null 
  * Minimal TOML parser for the subset we use.
  * Handles: string values, arrays of strings, nested tables via [section.subsection].
  *
- * Limitations: does not handle escaped quotes within strings (e.g. "path with \"quotes\"").
+ * Limitations:
+ * - Does not handle escaped quotes within strings (e.g. "path with \"quotes\"").
+ * - Multi-line arrays are not supported; arrays must be on a single line.
  * This is acceptable for a config file with a known, simple schema.
  */
 export function parseToml(text: string): Record<string, unknown> {
@@ -79,7 +80,7 @@ export function parseToml(text: string): Record<string, unknown> {
   let currentSection: Record<string, unknown> = result;
   let currentSectionPath: string[] = [];
 
-  for (const rawLine of text.split("\n")) {
+  for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
 
     // Skip empty lines and comments
@@ -121,7 +122,18 @@ export function parseToml(text: string): Record<string, unknown> {
         if (closeQuote >= 0) {
           rawValue = rawValue.slice(0, closeQuote + 1).trim();
         }
-      } else if (!rawValue.startsWith("[")) {
+      } else if (rawValue.startsWith("[")) {
+        // Array value: find the real closing bracket, ignoring trailing comments
+        const closeBracket = rawValue.lastIndexOf("]");
+        if (closeBracket < 0) {
+          throw new Error(
+            `Multi-line arrays are not supported. ` +
+            `Key "${key}" has an opening "[" but no closing "]" on the same line. ` +
+            `Please use single-line arrays, e.g.: ${key} = ["a", "b"]`
+          );
+        }
+        rawValue = rawValue.slice(0, closeBracket + 1).trim();
+      } else {
         const commentIdx = rawValue.indexOf("#");
         if (commentIdx >= 0) {
           rawValue = rawValue.slice(0, commentIdx).trim();
@@ -129,12 +141,17 @@ export function parseToml(text: string): Record<string, unknown> {
       }
       let value: unknown = rawValue;
 
-      // Array: ["a", "b", "c"]
-      const arrayMatch = (value as string).match(/^\[(.+)\]$/);
+      // Array: ["a", "b", "c"] or []
+      const arrayMatch = (value as string).match(/^\[(.*)\]$/);
       if (arrayMatch) {
-        value = arrayMatch[1]
-          .split(",")
-          .map((v) => v.trim().replace(/^["']|["']$/g, ""));
+        const inner = arrayMatch[1].trim();
+        if (inner === "") {
+          value = [];
+        } else {
+          value = inner
+            .split(",")
+            .map((v) => v.trim().replace(/^["']|["']$/g, ""));
+        }
       }
       // Boolean
       else if (value === "true") value = true;
@@ -159,7 +176,13 @@ export function loadConfig(startDir?: string): Config {
   const configFile = findConfigFile(startDir);
 
   if (!configFile) {
-    return { ...DEFAULTS, vaultRoot: resolve(startDir ?? process.cwd()) };
+    const vaultRoot = resolve(startDir ?? process.cwd());
+    return {
+      ...DEFAULTS,
+      vaultRoot,
+      backlogDir: resolve(vaultRoot, DEFAULTS.backlogDir),
+      archiveDir: resolve(vaultRoot, DEFAULTS.backlogDir, DEFAULTS.archiveDir),
+    };
   }
 
   const raw = readFileSync(configFile, "utf-8");
@@ -176,10 +199,21 @@ export function loadConfig(startDir?: string): Config {
   const backlogRel = (paths["backlog_dir"] as string) ?? DEFAULTS.backlogDir;
   const archiveRel = (paths["archive_dir"] as string) ?? DEFAULTS.archiveDir;
 
+  const backlogDir = resolve(vaultRoot, backlogRel);
+  const archiveDir = resolve(vaultRoot, backlogRel, archiveRel);
+
+  // Path traversal validation: ensure directories stay inside vault root
+  if (relative(vaultRoot, backlogDir).startsWith("..")) {
+    throw new Error("backlog_dir must be inside the vault root");
+  }
+  if (relative(vaultRoot, archiveDir).startsWith("..")) {
+    throw new Error("archive_dir must be inside the vault root");
+  }
+
   return {
     vaultRoot,
-    backlogDir: resolve(vaultRoot, backlogRel),
-    archiveDir: resolve(vaultRoot, backlogRel, archiveRel),
+    backlogDir,
+    archiveDir,
     statuses: (task["statuses"] as string[]) ?? DEFAULTS.statuses,
     priorities: (task["priorities"] as string[]) ?? DEFAULTS.priorities,
     defaultPriority: (task["default_priority"] as string) ?? DEFAULTS.defaultPriority,
@@ -205,6 +239,7 @@ export function generateDefaultConfig(): string {
   return `# vault-tasks configuration
 # Place this file at your vault/repo root.
 # All paths are relative to this file's directory.
+# Note: arrays must be on a single line
 
 [paths]
 backlog_dir = "50-backlog"        # where task files live
