@@ -1,6 +1,6 @@
 filters:
   and:
-    - file.inFolder("50-backlog")
+    - file.inFolder("{{backlog_dir}}")
     - file.ext == "md"
 formulas:
   age_days: (today() - date(created)).days

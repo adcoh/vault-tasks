@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseFrontmatter } from "../frontmatter.js";
@@ -143,6 +143,94 @@ describe("CLI integration", () => {
     assert.ok(result.stdout.includes("title: Show me"));
     assert.ok(result.stdout.includes("# Show me"));
   });
+
+  it("start changes status to in-progress", () => {
+    run(["new", "Start me"], dir);
+    const result = run(["start", "1"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("in-progress"));
+
+    const content = readFileSync(join(dir, "50-backlog", "0001-start-me.md"), "utf-8");
+    const { meta } = parseFrontmatter(content);
+    assert.equal(meta["status"], "in-progress");
+  });
+
+  it("start detects no-op when already in-progress", () => {
+    run(["new", "Already going"], dir);
+    run(["start", "1"], dir);
+    const result = run(["start", "1"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("already"));
+  });
+
+  it("archive moves completed tasks", () => {
+    // Disable auto-archive so done tasks stay in backlog for manual archiving
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[paths]\nbacklog_dir = "50-backlog"\narchive_dir = "archive"\n\n[task]\nauto_archive = false\n'
+    );
+    run(["new", "Task A"], dir);
+    run(["new", "Task B"], dir);
+    run(["edit", "1", "--status", "done"], dir);
+    const result = run(["archive"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("Archived") || result.stdout.includes("archived"));
+  });
+
+  it("stale returns exit 0 with no tasks", () => {
+    const result = run(["stale"], dir);
+    assert.equal(result.exitCode, 0);
+  });
+
+  it("--help prints usage", () => {
+    const result = run(["--help"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("vault-tasks"));
+  });
+
+  it("list --status done finds archived tasks", () => {
+    run(["new", "Will be done"], dir);
+    run(["done", "1"], dir);
+    const result = run(["list", "--status", "done"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("Will be done"));
+  });
+
+  it("list with no tasks shows empty message", () => {
+    const result = run(["list"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("No tasks found"));
+  });
+
+  it("edit with --tags updates tags", () => {
+    run(["new", "Tag target"], dir);
+    run(["edit", "1", "--tags", "new-tag,other"], dir);
+    const content = readFileSync(join(dir, "50-backlog", "0001-tag-target.md"), "utf-8");
+    const { meta } = parseFrontmatter(content);
+    assert.deepEqual(meta["tags"], ["new-tag", "other"]);
+  });
+
+  it("done shows archived indicator", () => {
+    run(["new", "Archive indicator"], dir);
+    const result = run(["done", "1"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("archived"));
+  });
+
+  it("edit with both --status and --priority", () => {
+    run(["new", "Multi edit"], dir);
+    run(["edit", "1", "--status", "in-progress", "--priority", "high"], dir);
+    const content = readFileSync(join(dir, "50-backlog", "0001-multi-edit.md"), "utf-8");
+    const { meta } = parseFrontmatter(content);
+    assert.equal(meta["status"], "in-progress");
+    assert.equal(meta["priority"], "high");
+  });
+
+  it("search with no match shows message", () => {
+    const result = run(["search", "nonexistent"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("No tasks matching"));
+  });
 });
 
 describe("CLI error handling", () => {
@@ -182,5 +270,44 @@ describe("CLI error handling", () => {
     const result = run(["frobnicate"], dir);
     assert.equal(result.exitCode, 1);
     assert.ok(result.stderr.includes("Unknown command"));
+  });
+
+  it("stale with invalid --days fails", () => {
+    const result = run(["stale", "--days", "foo"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.stderr.includes("positive integer"));
+  });
+
+  it("show without argument fails", () => {
+    const result = run(["show"], dir);
+    assert.equal(result.exitCode, 1);
+  });
+
+  it("start without argument fails", () => {
+    const result = run(["start"], dir);
+    assert.equal(result.exitCode, 1);
+  });
+
+  it("edit without argument fails", () => {
+    const result = run(["edit"], dir);
+    assert.equal(result.exitCode, 1);
+  });
+
+  it("done with archived task shows descriptive error", () => {
+    run(["new", "Already done"], dir);
+    run(["done", "1"], dir);
+    const result = run(["done", "1"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.stderr.includes("archived") || result.stderr.includes("No task"));
+  });
+
+  it("status and priority are case-insensitive", () => {
+    run(["new", "Case test"], dir);
+    const result = run(["edit", "1", "--status", "IN-PROGRESS", "--priority", "HIGH"], dir);
+    assert.equal(result.exitCode, 0);
+    const content = readFileSync(join(dir, "50-backlog", "0001-case-test.md"), "utf-8");
+    const { meta } = parseFrontmatter(content);
+    assert.equal(meta["status"], "in-progress");
+    assert.equal(meta["priority"], "high");
   });
 });

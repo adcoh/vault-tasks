@@ -32,7 +32,8 @@ export function cmdNew(
         cwd: config.vaultRoot,
         stdio: "inherit",
       });
-      execFileSync("git", ["commit", "-m", `chore: add backlog task — ${task.title}`], {
+      const truncatedTitle = task.title.length > 72 ? task.title.slice(0, 69) + "..." : task.title;
+      execFileSync("git", ["commit", "-m", `chore: add backlog task — ${truncatedTitle}`], {
         cwd: config.vaultRoot,
         stdio: "inherit",
       });

@@ -45,4 +45,46 @@ describe("slugify", () => {
     assert.equal(result.length, 10);
     assert.equal(result, "supercalif");
   });
+
+  it("strips path traversal characters", () => {
+    assert.equal(slugify("../../etc/passwd"), "etcpasswd");
+  });
+
+  it("strips directory separators", () => {
+    assert.equal(slugify("foo/bar/baz"), "foobarbaz");
+  });
+
+  it("strips backslash path separators", () => {
+    assert.equal(slugify("foo\\bar\\baz"), "foobarbaz");
+  });
+
+  it("handles unicode by stripping non-ascii", () => {
+    const result = slugify("Résumé des tâches");
+    assert.ok(result.length > 0);
+    assert.ok(!result.includes("é"));
+    assert.ok(!result.includes("â"));
+  });
+
+  it("handles null byte injection", () => {
+    const result = slugify("task\x00name");
+    assert.ok(!result.includes("\x00"));
+  });
+
+  it("handles extremely long titles", () => {
+    const long = "a".repeat(1000);
+    const result = slugify(long, 60);
+    assert.ok(result.length <= 60);
+  });
+
+  it("handles title with only numbers", () => {
+    assert.equal(slugify("12345"), "12345");
+  });
+
+  it("handles title with only hyphens", () => {
+    assert.equal(slugify("---"), "untitled");
+  });
+
+  it("handles mixed whitespace types", () => {
+    assert.equal(slugify("tab\there\nnewline"), "tab-here-newline");
+  });
 });

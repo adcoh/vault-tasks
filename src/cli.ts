@@ -26,7 +26,7 @@ Commands:
   show <id>             Show full task
   done <id>             Mark task as done
   start <id>            Mark task as in-progress
-  edit <id>             Edit task fields
+  edit <id>             Edit task fields (--status, --priority, --tags)
   archive               Move completed tasks to archive
   tags                  List all tags in use
   init                  Initialize vault-tasks in current directory
@@ -39,47 +39,76 @@ Options (vary by command):
   --commit              Git commit after creating
   --status              Filter or set status
   --tag                 Filter by tag
-  --all, -a             Include done/archived tasks
+  --all, -a             Include done/archived tasks (list, search)
+  --install              Install all skills and rules (install-skills)
   --days, -d            Stale threshold in days (default: 14)
   --list                List available skills
   --update              Overwrite existing skill files
+  --help, -h            Show this help message
 `;
 
-function parseArgs(argv: string[]): { command: string; args: Record<string, string | boolean> ; positional: string[] } {
+const BOOLEAN_FLAGS = new Set(["all", "commit", "install", "list", "update", "help"]);
+
+function isFlag(arg: string): boolean {
+  if (arg.startsWith("--")) return true;
+  if (arg.startsWith("-") && arg.length === 2 && /[a-zA-Z]/.test(arg[1])) return true;
+  return false;
+}
+
+function parseArgs(argv: string[]): { command: string; args: Record<string, string | boolean>; positional: string[] } {
   const command = argv[0] ?? "";
   const args: Record<string, string | boolean> = {};
   const positional: string[] = [];
+
+  const shortFlags: Record<string, string> = {
+    p: "priority",
+    t: "tags",
+    s: "source",
+    a: "all",
+    d: "days",
+    h: "help",
+  };
 
   let i = 1;
   while (i < argv.length) {
     const arg = argv[i];
 
+    if (arg.startsWith("--") && arg.includes("=")) {
+      const eqIdx = arg.indexOf("=");
+      args[arg.slice(2, eqIdx)] = arg.slice(eqIdx + 1);
+      i++;
+      continue;
+    }
+
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      const next = argv[i + 1];
-      if (next && !next.startsWith("-")) {
-        args[key] = next;
-        i += 2;
-      } else {
+      if (BOOLEAN_FLAGS.has(key)) {
         args[key] = true;
         i++;
+      } else {
+        const next = argv[i + 1];
+        if (next && !isFlag(next)) {
+          args[key] = next;
+          i += 2;
+        } else {
+          args[key] = true;
+          i++;
+        }
       }
-    } else if (arg.startsWith("-") && arg.length === 2) {
-      const short: Record<string, string> = {
-        p: "priority",
-        t: "tags",
-        s: "source",
-        a: "all",
-        d: "days",
-      };
-      const key = short[arg[1]] ?? arg[1];
-      const next = argv[i + 1];
-      if (next && !next.startsWith("-")) {
-        args[key] = next;
-        i += 2;
-      } else {
+    } else if (arg.startsWith("-") && arg.length === 2 && /[a-zA-Z]/.test(arg[1])) {
+      const key = shortFlags[arg[1]] ?? arg[1];
+      if (BOOLEAN_FLAGS.has(key)) {
         args[key] = true;
         i++;
+      } else {
+        const next = argv[i + 1];
+        if (next && !isFlag(next)) {
+          args[key] = next;
+          i += 2;
+        } else {
+          args[key] = true;
+          i++;
+        }
       }
     } else {
       positional.push(arg);
@@ -93,7 +122,7 @@ function parseArgs(argv: string[]): { command: string; args: Record<string, stri
 function main(): void {
   const rawArgs = process.argv.slice(2);
 
-  if (rawArgs.length === 0 || rawArgs[0] === "--help" || rawArgs[0] === "-h") {
+  if (rawArgs.length === 0 || rawArgs.includes("--help") || rawArgs.includes("-h")) {
     console.log(USAGE);
     return;
   }
@@ -109,8 +138,8 @@ function main(): void {
   // install-skills needs vault root but not necessarily a full config
   if (command === "install-skills") {
     const config = loadConfig();
-    cmdInstallSkills(config.vaultRoot, {
-      all: args["all"] === true,
+    cmdInstallSkills(config, {
+      install: args["install"] === true,
       list: args["list"] === true,
       update: args["update"] === true,
     });
@@ -129,7 +158,7 @@ function main(): void {
         }
         cmdNew(config, {
           title: positional[0],
-          priority: args["priority"] as string | undefined,
+          priority: (args["priority"] as string | undefined)?.toLowerCase(),
           tags: args["tags"] as string | undefined,
           source: args["source"] as string | undefined,
           commit: args["commit"] === true,
@@ -138,8 +167,8 @@ function main(): void {
 
       case "list":
         cmdList(config, {
-          status: args["status"] as string | undefined,
-          priority: args["priority"] as string | undefined,
+          status: (args["status"] as string | undefined)?.toLowerCase(),
+          priority: (args["priority"] as string | undefined)?.toLowerCase(),
           tag: args["tag"] as string | undefined,
           all: args["all"] === true,
         });
@@ -157,11 +186,19 @@ function main(): void {
         });
         break;
 
-      case "stale":
-        cmdStale(config, {
-          days: args["days"] ? parseInt(args["days"] as string, 10) : undefined,
-        });
+      case "stale": {
+        let days: number | undefined;
+        if (args["days"] !== undefined) {
+          days = parseInt(args["days"] as string, 10);
+          if (isNaN(days) || days < 1) {
+            console.error("Error: --days must be a positive integer");
+            process.exitCode = 1;
+            return;
+          }
+        }
+        cmdStale(config, { days });
         break;
+      }
 
       case "show":
         if (!positional[0]) {
@@ -192,14 +229,15 @@ function main(): void {
 
       case "edit":
         if (!positional[0]) {
-          console.error("Usage: vt edit <id-or-substring> [--status S] [--priority P]");
+          console.error("Usage: vt edit <id-or-substring> [--status S] [--priority P] [--tags t1,t2]");
           process.exitCode = 1;
           return;
         }
         cmdEdit(config, {
           identifier: positional[0],
-          status: args["status"] as string | undefined,
-          priority: args["priority"] as string | undefined,
+          status: (args["status"] as string | undefined)?.toLowerCase(),
+          priority: (args["priority"] as string | undefined)?.toLowerCase(),
+          tags: args["tags"] as string | undefined,
         });
         break;
 

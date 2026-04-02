@@ -12,7 +12,9 @@ export function cmdList(
   }
 ): void {
   const store = new TaskStore(config);
-  let tasks = store.loadAll(args.all);
+  // When filtering by status, include archive (done tasks may be there)
+  const includeArchived = args.all || !!args.status;
+  let tasks = store.loadAll(includeArchived);
 
   if (args.status) {
     tasks = tasks.filter((t) => t.status === args.status);

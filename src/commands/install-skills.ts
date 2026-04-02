@@ -1,28 +1,28 @@
 import {
-  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Config } from "../config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Templates are at the package root: ../../templates/ (from dist/commands/)
 function getTemplatesDir(): string {
-  // Walk up from dist/commands/ to package root
-  let dir = __dirname;
-  while (true) {
-    const candidate = join(dir, "templates");
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) break; // reached filesystem root
-    dir = parent;
+  // From dist/commands/, go up two levels to package root
+  const packageRoot = resolve(__dirname, "..", "..");
+  const templatesDir = join(packageRoot, "templates");
+  if (!existsSync(templatesDir)) {
+    throw new Error(
+      "Cannot find templates directory. Is the package installed correctly?"
+    );
   }
-  throw new Error("Cannot find templates directory. Is the package installed correctly?");
+  return templatesDir;
 }
 
 interface SkillEntry {
@@ -74,7 +74,7 @@ function listAvailable(): SkillEntry[] {
       name: "backlog",
       type: "base",
       src: baseFile,
-      destRel: "50-backlog/backlog.base",
+      destRel: "{{backlog_dir}}/backlog.base",
     });
   }
 
@@ -82,21 +82,23 @@ function listAvailable(): SkillEntry[] {
 }
 
 export function cmdInstallSkills(
-  vaultRoot: string,
-  args: { all?: boolean; list?: boolean; update?: boolean }
+  config: Config,
+  args: { install?: boolean; list?: boolean; update?: boolean }
 ): void {
   const available = listAvailable();
+  const backlogRel = relative(config.vaultRoot, config.backlogDir);
 
   if (args.list) {
     console.log("Available templates:\n");
     for (const entry of available) {
-      console.log(`  [${entry.type}] ${entry.name} → ${entry.destRel}`);
+      const displayRel = entry.destRel.replace(/\{\{backlog_dir\}\}/g, backlogRel);
+      console.log(`  [${entry.type}] ${entry.name} → ${displayRel}`);
     }
     return;
   }
 
-  if (!args.all) {
-    console.log("Usage: vt install-skills --all    Install all skills, rules, and templates");
+  if (!args.install) {
+    console.log("Usage: vt install-skills --install  Install all skills, rules, and templates");
     console.log("       vt install-skills --list   List available templates");
     console.log("       vt install-skills --update Overwrite existing base files (preserves .local.md)");
     return;
@@ -106,19 +108,25 @@ export function cmdInstallSkills(
   let skipped = 0;
 
   for (const entry of available) {
-    const destPath = resolve(vaultRoot, entry.destRel);
+    const resolvedDestRel = entry.destRel.replace(/\{\{backlog_dir\}\}/g, backlogRel);
+    const destPath = resolve(config.vaultRoot, resolvedDestRel);
     const destDir = dirname(destPath);
 
     // Never overwrite unless --update
     if (existsSync(destPath) && !args.update) {
-      console.log(`  Exists (skip): ${entry.destRel}`);
+      console.log(`  Exists (skip): ${resolvedDestRel}`);
       skipped++;
       continue;
     }
 
     mkdirSync(destDir, { recursive: true });
-    copyFileSync(entry.src, destPath);
-    console.log(`  Installed: ${entry.destRel}`);
+
+    // Substitute {{backlog_dir}} placeholder with actual configured path
+    let content = readFileSync(entry.src, "utf-8");
+    content = content.replace(/\{\{backlog_dir\}\}/g, backlogRel);
+    content = content.replace(/50-backlog/g, backlogRel);
+    writeFileSync(destPath, content, "utf-8");
+    console.log(`  Installed: ${resolvedDestRel}`);
     installed++;
   }
 
