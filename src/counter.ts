@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { randomInt } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { Config } from "./config.js";
 
 /**
@@ -27,11 +28,44 @@ function scanMaxId(config: Config): number {
 }
 
 /**
+ * Get the path to the shared git common dir (works across worktrees).
+ * Returns null if git is not available or the repo is not a git repo.
+ */
+function getGitCommonDir(cwd: string): string | null {
+  try {
+    const result = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+      cwd,
+      encoding: "utf-8",
+      timeout: 5000,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return resolve(cwd, result.trim());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve the counter file path.
+ *
+ * Strategy: use git common dir if available (shared across worktrees),
+ * fall back to vault root for non-git repos or read-only .git.
+ */
+function getCounterPath(config: Config): string {
+  const gitDir = getGitCommonDir(config.vaultRoot);
+  if (gitDir) {
+    return join(gitDir, "vault-tasks-counter.json");
+  }
+  return join(config.vaultRoot, ".vault-tasks-counter.json");
+}
+
+/**
  * Get the next sequential task ID.
  *
- * Uses a simple JSON counter file in the vault root.
- * Falls back to file scanning if the counter file is missing or corrupt.
- * Always cross-checks against files to prevent collisions.
+ * Uses a JSON counter file shared across worktrees (in git common dir)
+ * or in the vault root for non-git repos. Falls back to file scanning
+ * if the counter file is missing or corrupt. Always cross-checks against
+ * existing files to prevent collisions.
  *
  * Note: A race condition exists between reading and writing the counter file.
  * Two concurrent processes could get the same ID. This is handled safely by
@@ -40,7 +74,7 @@ function scanMaxId(config: Config): number {
  */
 function getNextSequentialId(config: Config): number {
   const fileMax = scanMaxId(config);
-  const counterPath = join(config.vaultRoot, ".vault-tasks-counter.json");
+  const counterPath = getCounterPath(config);
 
   let storedNext = 0;
   try {
