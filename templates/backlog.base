@@ -1,0 +1,62 @@
+filters:
+  and:
+    - file.inFolder("{{backlog_dir}}")
+    - file.ext == "md"
+formulas:
+  age_days: (today() - date(created)).days
+  stale: if(status == "open" && (today() - date(created)).days > 14, "⚠️ stale", "")
+  priority_icon: if(priority == "high", "🔴", if(priority == "medium", "🟡", "🟢"))
+properties:
+  formula.priority_icon:
+    displayName: P
+  formula.age_days:
+    displayName: Age (days)
+  formula.stale:
+    displayName: Flag
+views:
+  - type: table
+    name: Open Tasks
+    filters:
+      and:
+        - status == "open" || status == "in-progress"
+    groupBy:
+      property: priority
+      direction: ASC
+    order:
+      - formula.priority_icon
+      - file.name
+      - status
+      - tags
+      - formula.age_days
+      - formula.stale
+      - source
+    sort:
+      - property: formula.stale
+        direction: DESC
+    summaries:
+      formula.age_days: Average
+    columnSize:
+      title: 305
+  - type: table
+    name: All Tasks
+    order:
+      - formula.priority_icon
+      - file.name
+      - status
+      - priority
+      - tags
+      - created
+      - formula.age_days
+      - source
+  - type: table
+    name: Done / Won't Do
+    filters:
+      or:
+        - status == "done"
+        - status == "wont-do"
+    order:
+      - file.name
+      - status
+      - tags
+      - created
+      - source
