@@ -37,7 +37,6 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    environment: npm
     permissions:
       contents: read
       id-token: write
