@@ -9,8 +9,11 @@ import { getNextId, formatId } from "../counter.js";
 function makeConfig(dir: string, strategy: Config["idStrategy"] = "sequential"): Config {
   return {
     vaultRoot: dir,
-    backlogDir: join(dir, "50-backlog"),
-    archiveDir: join(dir, "50-backlog", "archive"),
+    backlogDir: join(dir, "backlog"),
+    archiveDir: join(dir, "backlog", "archive"),
+    journalDir: join(dir, "journal"),
+    projectsDir: join(dir, "projects"),
+    evergreenDir: join(dir, "evergreen"),
     statuses: ["open", "in-progress", "done", "wont-do"],
     priorities: ["high", "medium", "low"],
     defaultPriority: "medium",
@@ -29,7 +32,7 @@ describe("getNextId", () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "vt-counter-"));
-    mkdirSync(join(dir, "50-backlog"), { recursive: true });
+    mkdirSync(join(dir, "backlog"), { recursive: true });
   });
 
   it("returns 1 for empty directory (sequential)", () => {
@@ -40,25 +43,25 @@ describe("getNextId", () => {
 
   it("returns max+1 when files exist (sequential)", () => {
     const config = makeConfig(dir, "sequential");
-    writeFileSync(join(dir, "50-backlog", "0003-task.md"), "");
-    writeFileSync(join(dir, "50-backlog", "0001-task.md"), "");
+    writeFileSync(join(dir, "backlog", "0003-task.md"), "");
+    writeFileSync(join(dir, "backlog", "0001-task.md"), "");
     const id = getNextId(config);
     assert.equal(id, 4);
   });
 
   it("scans archive directory too (sequential)", () => {
     const config = makeConfig(dir, "sequential");
-    mkdirSync(join(dir, "50-backlog", "archive"), { recursive: true });
-    writeFileSync(join(dir, "50-backlog", "0001-task.md"), "");
-    writeFileSync(join(dir, "50-backlog", "archive", "0005-old.md"), "");
+    mkdirSync(join(dir, "backlog", "archive"), { recursive: true });
+    writeFileSync(join(dir, "backlog", "0001-task.md"), "");
+    writeFileSync(join(dir, "backlog", "archive", "0005-old.md"), "");
     const id = getNextId(config);
     assert.equal(id, 6);
   });
 
   it("ignores non-md files", () => {
     const config = makeConfig(dir, "sequential");
-    writeFileSync(join(dir, "50-backlog", "0010-readme.txt"), "");
-    writeFileSync(join(dir, "50-backlog", "0002-task.md"), "");
+    writeFileSync(join(dir, "backlog", "0010-readme.txt"), "");
+    writeFileSync(join(dir, "backlog", "0002-task.md"), "");
     const id = getNextId(config);
     assert.equal(id, 3);
   });
@@ -84,7 +87,7 @@ describe("getNextId", () => {
     for (let i = 0; i < 10; i++) {
       ids.add(getNextId(config));
       // Simulate a file being created with that ID
-      writeFileSync(join(dir, "50-backlog", `${String(i + 1).padStart(4, "0")}-task.md`), "");
+      writeFileSync(join(dir, "backlog", `${String(i + 1).padStart(4, "0")}-task.md`), "");
     }
     assert.equal(ids.size, 10, "all IDs should be unique");
   });

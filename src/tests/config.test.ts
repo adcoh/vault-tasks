@@ -13,10 +13,10 @@ describe("parseToml", () => {
 
   it("parses sections", () => {
     const result = parseToml(`[paths]
-backlog_dir = "50-backlog"
+backlog_dir = "backlog"
 archive_dir = "archive"`);
     const paths = result["paths"] as Record<string, unknown>;
-    assert.equal(paths["backlog_dir"], "50-backlog");
+    assert.equal(paths["backlog_dir"], "backlog");
     assert.equal(paths["archive_dir"], "archive");
   });
 
@@ -44,8 +44,8 @@ archive_dir = "archive"`);
   });
 
   it("strips inline comments from quoted values", () => {
-    const result = parseToml('backlog_dir = "50-backlog"        # where task files live');
-    assert.equal(result["backlog_dir"], "50-backlog");
+    const result = parseToml('backlog_dir = "backlog"        # where task files live');
+    assert.equal(result["backlog_dir"], "backlog");
   });
 
   it("strips inline comments from unquoted values", () => {
@@ -80,9 +80,9 @@ archive_dir = "archive"`);
   });
 
   it("handles CRLF line endings", () => {
-    const result = parseToml("[paths]\r\nbacklog_dir = \"50-backlog\"\r\narchive_dir = \"archive\"");
+    const result = parseToml("[paths]\r\nbacklog_dir = \"backlog\"\r\narchive_dir = \"archive\"");
     const paths = result["paths"] as Record<string, unknown>;
-    assert.equal(paths["backlog_dir"], "50-backlog");
+    assert.equal(paths["backlog_dir"], "backlog");
     assert.equal(paths["archive_dir"], "archive");
   });
 
@@ -144,6 +144,14 @@ describe("loadConfig", () => {
     assert.ok(config.archiveDir.startsWith("/"), "archiveDir should be absolute");
   });
 
+  it("returns default vault structure paths when no config", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    const config = loadConfig(dir);
+    assert.equal(config.journalDir, join(dir, "journal"));
+    assert.equal(config.projectsDir, join(dir, "projects"));
+    assert.equal(config.evergreenDir, join(dir, "evergreen"));
+  });
+
   it("resolves paths from config file location", () => {
     const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
     writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\nbacklog_dir = "tasks"\narchive_dir = "done"');
@@ -153,9 +161,30 @@ describe("loadConfig", () => {
     assert.equal(config.archiveDir, join(dir, "tasks", "done"));
   });
 
+  it("resolves custom vault structure paths from config", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\njournal_dir = "journal"\nprojects_dir = "projects"\nevergreen_dir = "notes"');
+    const config = loadConfig(dir);
+    assert.equal(config.journalDir, join(dir, "journal"));
+    assert.equal(config.projectsDir, join(dir, "projects"));
+    assert.equal(config.evergreenDir, join(dir, "notes"));
+  });
+
   it("throws on path traversal in backlog_dir", () => {
     const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
     writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\nbacklog_dir = "../../etc"');
     assert.throws(() => loadConfig(dir), /must be inside the vault root/);
+  });
+
+  it("throws on path traversal in vault structure dirs", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\njournal_dir = "../../etc"');
+    assert.throws(() => loadConfig(dir), /journal_dir must be inside the vault root/);
+
+    writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\nprojects_dir = "../../etc"');
+    assert.throws(() => loadConfig(dir), /projects_dir must be inside the vault root/);
+
+    writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\nevergreen_dir = "../../etc"');
+    assert.throws(() => loadConfig(dir), /evergreen_dir must be inside the vault root/);
   });
 });

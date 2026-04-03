@@ -13,10 +13,10 @@ This skill runs the full knowledge extraction pipeline. It can be invoked manual
 
 1. **Create branch** — `git checkout -b weekly-review/YYYY-MM-DD` from main.
 
-2. **Determine range** — find the most recent weekly review note in `01-journal/YYYY/` (files with `weekly-review` tag). Use its `range_end` property as the start date. If none found, use the earliest journal entry date. The end date is today.
+2. **Determine range** — find the most recent weekly review note in `{{journal_dir}}/YYYY/` (files with `weekly-review` tag). Use its `range_end` property as the start date. If none found, use the earliest journal entry date. The end date is today.
 
 3. **Gather inputs:**
-   - Journal entries in `01-journal/YYYY/` filtered to the date range
+   - Journal entries in `{{journal_dir}}/YYYY/` filtered to the date range
    - Read each entry for themes, open threads, and actionable items
    - Current backlog: `vt list`
    - Git log for the period: `git log --since=<start> --format="%h %ad %s" --date=short`
@@ -24,8 +24,8 @@ This skill runs the full knowledge extraction pipeline. It can be invoked manual
 4. **Run consolidation** — identify recurring themes, evergreen candidates, and open threads across the journal entries.
 
 5. **Expand evergreen notes** — for each evergreen candidate:
-   - Check for duplicates in `30-evergreen/`
-   - Write to `30-evergreen/` with statement-style title
+   - Check for duplicates in `{{evergreen_dir}}/`
+   - Write to `{{evergreen_dir}}/` with statement-style title
    - Use this frontmatter:
      ```yaml
      ---
@@ -52,7 +52,7 @@ This skill runs the full knowledge extraction pipeline. It can be invoked manual
 
 8. **Update CONTEXT.md files** — for each area or project that had activity this week, update its CONTEXT.md to reflect progress.
 
-9. **Write the weekly review note** — create `01-journal/YYYY/YYYY-MM-DD Weekly Review.md`:
+9. **Write the weekly review note** — create `{{journal_dir}}/YYYY/YYYY-MM-DD Weekly Review.md`:
     ```yaml
     ---
     title: "Weekly Review — YYYY-MM-DD"

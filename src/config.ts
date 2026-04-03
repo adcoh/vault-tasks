@@ -5,6 +5,9 @@ export interface Config {
   vaultRoot: string;
   backlogDir: string;
   archiveDir: string;
+  journalDir: string;
+  projectsDir: string;
+  evergreenDir: string;
   statuses: string[];
   priorities: string[];
   defaultPriority: string;
@@ -24,8 +27,11 @@ export interface Config {
 
 const DEFAULTS: Config = {
   vaultRoot: process.cwd(),
-  backlogDir: "50-backlog",
+  backlogDir: "backlog",
   archiveDir: "archive",
+  journalDir: "journal",
+  projectsDir: "projects",
+  evergreenDir: "evergreen",
   statuses: ["open", "in-progress", "done", "wont-do"],
   priorities: ["high", "medium", "low"],
   defaultPriority: "medium",
@@ -182,6 +188,9 @@ export function loadConfig(startDir?: string): Config {
       vaultRoot,
       backlogDir: resolve(vaultRoot, DEFAULTS.backlogDir),
       archiveDir: resolve(vaultRoot, DEFAULTS.backlogDir, DEFAULTS.archiveDir),
+      journalDir: resolve(vaultRoot, DEFAULTS.journalDir),
+      projectsDir: resolve(vaultRoot, DEFAULTS.projectsDir),
+      evergreenDir: resolve(vaultRoot, DEFAULTS.evergreenDir),
     };
   }
 
@@ -198,22 +207,37 @@ export function loadConfig(startDir?: string): Config {
 
   const backlogRel = (paths["backlog_dir"] as string) ?? DEFAULTS.backlogDir;
   const archiveRel = (paths["archive_dir"] as string) ?? DEFAULTS.archiveDir;
+  const journalRel = (paths["journal_dir"] as string) ?? DEFAULTS.journalDir;
+  const projectsRel = (paths["projects_dir"] as string) ?? DEFAULTS.projectsDir;
+  const evergreenRel = (paths["evergreen_dir"] as string) ?? DEFAULTS.evergreenDir;
 
   const backlogDir = resolve(vaultRoot, backlogRel);
   const archiveDir = resolve(vaultRoot, backlogRel, archiveRel);
+  const journalDir = resolve(vaultRoot, journalRel);
+  const projectsDir = resolve(vaultRoot, projectsRel);
+  const evergreenDir = resolve(vaultRoot, evergreenRel);
 
   // Path traversal validation: ensure directories stay inside vault root
-  if (relative(vaultRoot, backlogDir).startsWith("..")) {
-    throw new Error("backlog_dir must be inside the vault root");
-  }
-  if (relative(vaultRoot, archiveDir).startsWith("..")) {
-    throw new Error("archive_dir must be inside the vault root");
+  const pathChecks: [string, string][] = [
+    [backlogDir, "backlog_dir"],
+    [archiveDir, "archive_dir"],
+    [journalDir, "journal_dir"],
+    [projectsDir, "projects_dir"],
+    [evergreenDir, "evergreen_dir"],
+  ];
+  for (const [absPath, name] of pathChecks) {
+    if (relative(vaultRoot, absPath).startsWith("..")) {
+      throw new Error(`${name} must be inside the vault root`);
+    }
   }
 
   return {
     vaultRoot,
     backlogDir,
     archiveDir,
+    journalDir,
+    projectsDir,
+    evergreenDir,
     statuses: (task["statuses"] as string[]) ?? DEFAULTS.statuses,
     priorities: (task["priorities"] as string[]) ?? DEFAULTS.priorities,
     defaultPriority: (task["default_priority"] as string) ?? DEFAULTS.defaultPriority,
@@ -242,8 +266,11 @@ export function generateDefaultConfig(): string {
 # Note: arrays must be on a single line
 
 [paths]
-backlog_dir = "50-backlog"        # where task files live
+backlog_dir = "backlog"           # where task files live
 archive_dir = "archive"           # relative to backlog_dir
+# journal_dir = "journal"         # build logs and session notes
+# projects_dir = "projects"       # project folders with CONTEXT.md
+# evergreen_dir = "evergreen"     # evergreen/zettelkasten notes
 
 [task]
 # statuses = ["open", "in-progress", "done", "wont-do"]

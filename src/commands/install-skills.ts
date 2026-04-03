@@ -86,12 +86,25 @@ export function cmdInstallSkills(
   args: { install?: boolean; list?: boolean; update?: boolean }
 ): void {
   const available = listAvailable();
-  const backlogRel = relative(config.vaultRoot, config.backlogDir);
+  const placeholders: [RegExp, string][] = [
+    [/\{\{backlog_dir\}\}/g, relative(config.vaultRoot, config.backlogDir)],
+    [/\{\{journal_dir\}\}/g, relative(config.vaultRoot, config.journalDir)],
+    [/\{\{projects_dir\}\}/g, relative(config.vaultRoot, config.projectsDir)],
+    [/\{\{evergreen_dir\}\}/g, relative(config.vaultRoot, config.evergreenDir)],
+  ];
+
+  function substitute(text: string): string {
+    let result = text;
+    for (const [pattern, value] of placeholders) {
+      result = result.replace(pattern, value);
+    }
+    return result;
+  }
 
   if (args.list) {
     console.log("Available templates:\n");
     for (const entry of available) {
-      const displayRel = entry.destRel.replace(/\{\{backlog_dir\}\}/g, backlogRel);
+      const displayRel = substitute(entry.destRel);
       console.log(`  [${entry.type}] ${entry.name} → ${displayRel}`);
     }
     return;
@@ -108,7 +121,7 @@ export function cmdInstallSkills(
   let skipped = 0;
 
   for (const entry of available) {
-    const resolvedDestRel = entry.destRel.replace(/\{\{backlog_dir\}\}/g, backlogRel);
+    const resolvedDestRel = substitute(entry.destRel);
     const destPath = resolve(config.vaultRoot, resolvedDestRel);
     const destDir = dirname(destPath);
 
@@ -121,10 +134,8 @@ export function cmdInstallSkills(
 
     mkdirSync(destDir, { recursive: true });
 
-    // Substitute {{backlog_dir}} placeholder with actual configured path
-    let content = readFileSync(entry.src, "utf-8");
-    content = content.replace(/\{\{backlog_dir\}\}/g, backlogRel);
-    content = content.replace(/50-backlog/g, backlogRel);
+    // Substitute all placeholders with configured paths
+    const content = substitute(readFileSync(entry.src, "utf-8"));
     writeFileSync(destPath, content, "utf-8");
     console.log(`  Installed: ${resolvedDestRel}`);
     installed++;

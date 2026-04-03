@@ -5,7 +5,7 @@ import { generateDefaultConfig } from "../config.js";
 export function cmdInit(args: { dir?: string }): void {
   const root = resolve(args.dir ?? process.cwd());
   const configPath = join(root, ".vault-tasks.toml");
-  const backlogDir = join(root, "50-backlog");
+  const backlogDir = join(root, "backlog");
 
   if (existsSync(configPath)) {
     console.log(`.vault-tasks.toml already exists at ${configPath}`);
@@ -17,7 +17,7 @@ export function cmdInit(args: { dir?: string }): void {
 
   if (!existsSync(backlogDir)) {
     mkdirSync(backlogDir, { recursive: true });
-    console.log(`Created: 50-backlog/`);
+    console.log(`Created: backlog/`);
   }
 
   // Ensure .vault-tasks-counter.json is gitignored

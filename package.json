@@ -18,8 +18,10 @@
   "sideEffects": false,
   "files": [
     "dist",
+    "!dist/tests",
     "templates",
-    "src"
+    "src",
+    "!src/tests"
   ],
   "scripts": {
     "build": "tsc",

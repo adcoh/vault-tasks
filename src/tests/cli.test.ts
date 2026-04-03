@@ -43,7 +43,7 @@ describe("CLI integration", () => {
 
   it("init creates config and backlog dir", () => {
     assert.ok(existsSync(join(dir, ".vault-tasks.toml")));
-    assert.ok(existsSync(join(dir, "50-backlog")));
+    assert.ok(existsSync(join(dir, "backlog")));
   });
 
   it("init is idempotent", () => {
@@ -56,11 +56,11 @@ describe("CLI integration", () => {
     const result = run(["new", "Test task", "--priority", "high", "--tags", "ui,auth", "--source", "[[2026-03-31]]"], dir);
     assert.equal(result.exitCode, 0);
 
-    const files = readdirSync(join(dir, "50-backlog")).filter((f: string) => f.endsWith(".md"));
+    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md"));
     assert.equal(files.length, 1);
     assert.match(files[0], /^0001-test-task\.md$/);
 
-    const content = readFileSync(join(dir, "50-backlog", files[0]), "utf-8");
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
     const { meta } = parseFrontmatter(content);
     assert.equal(meta["title"], "Test task");
     assert.equal(meta["status"], "open");
@@ -98,8 +98,8 @@ describe("CLI integration", () => {
     assert.equal(result.exitCode, 0);
 
     // Task should be in archive, not backlog
-    assert.ok(!existsSync(join(dir, "50-backlog", "0001-finish-this.md")));
-    const archivePath = join(dir, "50-backlog", "archive", "0001-finish-this.md");
+    assert.ok(!existsSync(join(dir, "backlog", "0001-finish-this.md")));
+    const archivePath = join(dir, "backlog", "archive", "0001-finish-this.md");
     assert.ok(existsSync(archivePath));
 
     // Status should be "done" in the file
@@ -130,8 +130,8 @@ describe("CLI integration", () => {
     run(["new", "Change me"], dir);
     run(["edit", "1", "--priority", "low"], dir);
 
-    const files = readdirSync(join(dir, "50-backlog")).filter((f: string) => f.endsWith(".md"));
-    const content = readFileSync(join(dir, "50-backlog", files[0]), "utf-8");
+    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md"));
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
     const { meta } = parseFrontmatter(content);
     assert.equal(meta["priority"], "low");
   });
@@ -150,7 +150,7 @@ describe("CLI integration", () => {
     assert.equal(result.exitCode, 0);
     assert.ok(result.stdout.includes("in-progress"));
 
-    const content = readFileSync(join(dir, "50-backlog", "0001-start-me.md"), "utf-8");
+    const content = readFileSync(join(dir, "backlog", "0001-start-me.md"), "utf-8");
     const { meta } = parseFrontmatter(content);
     assert.equal(meta["status"], "in-progress");
   });
@@ -167,7 +167,7 @@ describe("CLI integration", () => {
     // Disable auto-archive so done tasks stay in backlog for manual archiving
     writeFileSync(
       join(dir, ".vault-tasks.toml"),
-      '[paths]\nbacklog_dir = "50-backlog"\narchive_dir = "archive"\n\n[task]\nauto_archive = false\n'
+      '[paths]\nbacklog_dir = "backlog"\narchive_dir = "archive"\n\n[task]\nauto_archive = false\n'
     );
     run(["new", "Task A"], dir);
     run(["new", "Task B"], dir);
@@ -205,7 +205,7 @@ describe("CLI integration", () => {
   it("edit with --tags updates tags", () => {
     run(["new", "Tag target"], dir);
     run(["edit", "1", "--tags", "new-tag,other"], dir);
-    const content = readFileSync(join(dir, "50-backlog", "0001-tag-target.md"), "utf-8");
+    const content = readFileSync(join(dir, "backlog", "0001-tag-target.md"), "utf-8");
     const { meta } = parseFrontmatter(content);
     assert.deepEqual(meta["tags"], ["new-tag", "other"]);
   });
@@ -220,7 +220,7 @@ describe("CLI integration", () => {
   it("edit with both --status and --priority", () => {
     run(["new", "Multi edit"], dir);
     run(["edit", "1", "--status", "in-progress", "--priority", "high"], dir);
-    const content = readFileSync(join(dir, "50-backlog", "0001-multi-edit.md"), "utf-8");
+    const content = readFileSync(join(dir, "backlog", "0001-multi-edit.md"), "utf-8");
     const { meta } = parseFrontmatter(content);
     assert.equal(meta["status"], "in-progress");
     assert.equal(meta["priority"], "high");
@@ -305,7 +305,7 @@ describe("CLI error handling", () => {
     run(["new", "Case test"], dir);
     const result = run(["edit", "1", "--status", "IN-PROGRESS", "--priority", "HIGH"], dir);
     assert.equal(result.exitCode, 0);
-    const content = readFileSync(join(dir, "50-backlog", "0001-case-test.md"), "utf-8");
+    const content = readFileSync(join(dir, "backlog", "0001-case-test.md"), "utf-8");
     const { meta } = parseFrontmatter(content);
     assert.equal(meta["status"], "in-progress");
     assert.equal(meta["priority"], "high");

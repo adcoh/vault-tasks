@@ -9,8 +9,11 @@ import { TaskStore } from "../store.js";
 function makeConfig(dir: string): Config {
   return {
     vaultRoot: dir,
-    backlogDir: join(dir, "50-backlog"),
-    archiveDir: join(dir, "50-backlog", "archive"),
+    backlogDir: join(dir, "backlog"),
+    archiveDir: join(dir, "backlog", "archive"),
+    journalDir: join(dir, "journal"),
+    projectsDir: join(dir, "projects"),
+    evergreenDir: join(dir, "evergreen"),
     statuses: ["open", "in-progress", "done", "wont-do"],
     priorities: ["high", "medium", "low"],
     defaultPriority: "medium",
@@ -207,7 +210,7 @@ describe("TaskStore", () => {
   it("loadAll excludes non-task markdown files", () => {
     store.create({ title: "Real task" });
     // Create a non-task markdown file in backlog dir
-    writeFileSync(join(dir, "50-backlog", "README.md"), "# Notes\n");
+    writeFileSync(join(dir, "backlog", "README.md"), "# Notes\n");
     const tasks = store.loadAll();
     assert.equal(tasks.length, 1);
     assert.equal(tasks[0].title, "Real task");
@@ -231,8 +234,8 @@ describe("TaskStore", () => {
     store.create({ title: "Second task" });
     store.setStatus("1", "done");
     // Manually create a file at the archive destination for task 2
-    mkdirSync(join(dir, "50-backlog", "archive"), { recursive: true });
-    writeFileSync(join(dir, "50-backlog", "archive", "0002-second-task.md"), "conflicting");
+    mkdirSync(join(dir, "backlog", "archive"), { recursive: true });
+    writeFileSync(join(dir, "backlog", "archive", "0002-second-task.md"), "conflicting");
     assert.throws(() => store.setStatus("2", "done"), /already exists/i);
   });
 

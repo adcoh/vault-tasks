@@ -11,11 +11,11 @@ description: Pre-session briefing — surfaces open tasks, last session context,
 
 1. **Open tasks** — run `vt list` and present results sorted by priority (high > medium > low), grouped by tag. Keep it scannable — one line per task with `[[wikilinks]]` to the task file.
 
-2. **Last session** — find the most recent build log in `01-journal/YYYY/` (look for files with `build-log` in their tags/frontmatter). Read its **Next session** section and surface it prominently — this is the warm-start hook.
+2. **Last session** — find the most recent build log in `{{journal_dir}}/YYYY/` (look for files with `build-log` in their tags/frontmatter). Read its **Next session** section and surface it prominently — this is the warm-start hook.
 
-3. **Active projects** — scan `20-projects/` for in-progress work. For each folder project, read `CONTEXT.md` and extract the current status. For single-file projects, read the frontmatter/first section. Show one-liner status per project.
+3. **Active projects** — scan `{{projects_dir}}/` for in-progress work. For each folder project, read `CONTEXT.md` and extract the current status. For single-file projects, read the frontmatter/first section. Show one-liner status per project.
 
-4. **Relevant evergreen notes** — if the user states what they're working on today, search `30-evergreen/` by keyword and surface 3-5 related notes with brief excerpts. Skip this step if no topic is given.
+4. **Relevant evergreen notes** — if the user states what they're working on today, search `{{evergreen_dir}}/` by keyword and surface 3-5 related notes with brief excerpts. Skip this step if no topic is given.
 
 5. **Stale threads** — run `vt stale`. Flag these as needing triage (close, reprioritize, or act on).
 

@@ -11,7 +11,7 @@ description: Capture what was built, broken, learned, and decided in a session. 
 
 1. Ask the user: "Quick summary of today's session — what were you working on?" if not already clear from context
 2. Review the current conversation or any context the user provides
-3. Create a topic page in `01-journal/YYYY/` with filename: `YYYY-MM-DD HHMM <Topic>.md`
+3. Create a topic page in `{{journal_dir}}/YYYY/` with filename: `YYYY-MM-DD HHMM <Topic>.md`
 4. Structure the note with these sections:
 
 ```
