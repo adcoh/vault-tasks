@@ -29,7 +29,7 @@ function fileToTask(filePath: string, text: string): Task {
   const { meta, body } = parseFrontmatter(text);
   const name = basename(filePath) ?? "";
   const stem = name.replace(/\.md$/, "");
-  const idMatch = name.match(/^(\d+)-/);
+  const idMatch = name.match(/^([0-9A-Za-z]+)-/);
 
   const extraMeta: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(meta)) {
@@ -49,7 +49,7 @@ function fileToTask(filePath: string, text: string): Task {
   }
 
   return {
-    id: idMatch ? parseInt(idMatch[1], 10) : 0,
+    id: idMatch ? idMatch[1] : "",
     title: String(meta["title"] ?? "") || stem,
     status: String(meta["status"] ?? "") || "open",
     priority: String(meta["priority"] ?? "") || "medium",
@@ -90,7 +90,7 @@ export class TaskStore {
   private listMdFiles(dir: string): string[] {
     if (!existsSync(dir)) return [];
     return readdirSync(dir)
-      .filter((f) => /^\d+-.*\.md$/.test(f))
+      .filter((f) => /^[0-9A-Za-z]+-.*\.md$/.test(f))
       .sort()
       .map((f) => join(dir, f));
   }
@@ -122,7 +122,7 @@ export class TaskStore {
       const filePath = join(this.config.backlogDir, filename);
 
       const task: Task = {
-        id,
+        id: idStr,
         title,
         status: this.config.defaultStatus,
         priority,
@@ -168,14 +168,31 @@ export class TaskStore {
   private matchInDir(identifier: string, dir: string): Task | null {
     const files = this.listMdFiles(dir);
 
-    // Try numeric ID first
+    // Try zero-padded numeric prefix match (backwards compat: `vt done 1` → `0001-...`)
     const numId = parseInt(identifier, 10);
-    if (!isNaN(numId)) {
+    if (!isNaN(numId) && String(numId) === identifier) {
       const prefix = String(numId).padStart(this.config.padWidth, "0") + "-";
       const match = files.find((f) => basename(f)?.startsWith(prefix));
       if (match) {
         return fileToTask(match, readFileSync(match, "utf-8"));
       }
+    }
+
+    // Try case-insensitive ID prefix match (handles ULID prefixes: `vt done 01HYX`)
+    const upperIdent = identifier.toUpperCase();
+    const prefixMatches = files.filter((f) => {
+      const name = basename(f) ?? "";
+      const fileId = name.match(/^([0-9A-Za-z]+)-/);
+      return fileId && fileId[1].toUpperCase().startsWith(upperIdent);
+    });
+    if (prefixMatches.length === 1) {
+      return fileToTask(prefixMatches[0], readFileSync(prefixMatches[0], "utf-8"));
+    }
+    if (prefixMatches.length > 1) {
+      const names = prefixMatches.map((m) => basename(m));
+      throw new Error(
+        `Ambiguous match for '${identifier}':\n${names.map((n) => `  ${n}`).join("\n")}`
+      );
     }
 
     // Substring match on filename

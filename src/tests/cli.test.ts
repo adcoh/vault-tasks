@@ -33,12 +33,22 @@ function run(args: string[], cwd: string): RunResult {
   }
 }
 
+/** Write a config file that forces sequential ID strategy for backwards-compat tests */
+function writeSequentialConfig(dir: string): void {
+  writeFileSync(
+    join(dir, ".vault-tasks.toml"),
+    '[paths]\nbacklog_dir = "backlog"\narchive_dir = "archive"\n\n[id]\nstrategy = "sequential"\npad_width = 4\n'
+  );
+}
+
 describe("CLI integration", () => {
   let dir: string;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "vt-cli-"));
     run(["init"], dir);
+    // Override to sequential for existing tests
+    writeSequentialConfig(dir);
   });
 
   it("init creates config and backlog dir", () => {
@@ -167,7 +177,7 @@ describe("CLI integration", () => {
     // Disable auto-archive so done tasks stay in backlog for manual archiving
     writeFileSync(
       join(dir, ".vault-tasks.toml"),
-      '[paths]\nbacklog_dir = "backlog"\narchive_dir = "archive"\n\n[task]\nauto_archive = false\n'
+      '[paths]\nbacklog_dir = "backlog"\narchive_dir = "archive"\n\n[task]\nauto_archive = false\n\n[id]\nstrategy = "sequential"\npad_width = 4\n'
     );
     run(["new", "Task A"], dir);
     run(["new", "Task B"], dir);
@@ -239,6 +249,7 @@ describe("CLI error handling", () => {
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "vt-cli-err-"));
     run(["init"], dir);
+    writeSequentialConfig(dir);
   });
 
   it("new without title fails with exit code 1", () => {
@@ -309,5 +320,75 @@ describe("CLI error handling", () => {
     const { meta } = parseFrontmatter(content);
     assert.equal(meta["status"], "in-progress");
     assert.equal(meta["priority"], "high");
+  });
+});
+
+describe("CLI with ULID strategy", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-cli-ulid-"));
+    run(["init"], dir);
+    // Default config is ULID — no override needed
+  });
+
+  it("init creates config with ulid as default", () => {
+    const config = readFileSync(join(dir, ".vault-tasks.toml"), "utf-8");
+    assert.ok(config.includes("ulid"));
+  });
+
+  it("init does not create .gitignore for counter file", () => {
+    // ULID strategy doesn't need a counter file
+    assert.ok(!existsSync(join(dir, ".gitignore")));
+  });
+
+  it("new creates task with ULID-prefixed filename", () => {
+    const result = run(["new", "ULID task", "--priority", "high"], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    // ULID prefix: 26 uppercase Crockford base32 chars followed by a hyphen
+    assert.match(files[0], /^[0-9A-HJKMNP-TV-Z]{26}-ulid-task\.md$/);
+  });
+
+  it("show finds ULID task by prefix", () => {
+    run(["new", "Prefixed task"], dir);
+    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md"));
+    const ulidPrefix = files[0].slice(0, 8); // First 8 chars of ULID
+
+    const result = run(["show", ulidPrefix], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("Prefixed task"));
+  });
+
+  it("done archives ULID task by prefix", () => {
+    run(["new", "Archive me"], dir);
+    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md"));
+    const ulidPrefix = files[0].slice(0, 10);
+
+    const result = run(["done", ulidPrefix], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("archived"));
+
+    // Task should be in archive
+    const archiveFiles = readdirSync(join(dir, "backlog", "archive")).filter((f: string) => f.endsWith(".md"));
+    assert.equal(archiveFiles.length, 1);
+  });
+
+  it("list shows ULID tasks", () => {
+    run(["new", "Listed task"], dir);
+    const result = run(["list"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("Listed task"));
+  });
+
+  it("search finds ULID tasks", () => {
+    run(["new", "Searchable ULID"], dir);
+    run(["new", "Other task"], dir);
+    const result = run(["search", "searchable"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("Searchable ULID"));
+    assert.ok(!result.stdout.includes("Other task"));
   });
 });

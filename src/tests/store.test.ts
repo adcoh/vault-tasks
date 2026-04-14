@@ -38,7 +38,7 @@ describe("TaskStore", () => {
 
   it("creates a task", () => {
     const task = store.create({ title: "Test task" });
-    assert.equal(task.id, 1);
+    assert.equal(task.id, "0001");
     assert.equal(task.title, "Test task");
     assert.equal(task.status, "open");
     assert.equal(task.priority, "medium");
@@ -48,8 +48,8 @@ describe("TaskStore", () => {
   it("creates tasks with incrementing IDs", () => {
     const t1 = store.create({ title: "First" });
     const t2 = store.create({ title: "Second" });
-    assert.equal(t1.id, 1);
-    assert.equal(t2.id, 2);
+    assert.equal(t1.id, "0001");
+    assert.equal(t2.id, "0002");
   });
 
   it("loads all tasks", () => {

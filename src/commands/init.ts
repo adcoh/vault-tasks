@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { generateDefaultConfig } from "../config.js";
+import { generateDefaultConfig, loadConfig } from "../config.js";
 
 export function cmdInit(args: { dir?: string }): void {
   const root = resolve(args.dir ?? process.cwd());
@@ -20,17 +20,20 @@ export function cmdInit(args: { dir?: string }): void {
     console.log(`Created: backlog/`);
   }
 
-  // Ensure .vault-tasks-counter.json is gitignored
-  const gitignorePath = join(root, ".gitignore");
-  if (existsSync(gitignorePath)) {
-    const content = readFileSync(gitignorePath, "utf-8");
-    if (!content.includes(".vault-tasks-counter.json")) {
-      writeFileSync(gitignorePath, content.trimEnd() + "\n.vault-tasks-counter.json\n", "utf-8");
-      console.log("Updated: .gitignore (added .vault-tasks-counter.json)");
+  // Only add counter file to .gitignore for sequential ID strategy
+  const config = loadConfig(root);
+  if (config.idStrategy === "sequential") {
+    const gitignorePath = join(root, ".gitignore");
+    if (existsSync(gitignorePath)) {
+      const content = readFileSync(gitignorePath, "utf-8");
+      if (!content.includes(".vault-tasks-counter.json")) {
+        writeFileSync(gitignorePath, content.trimEnd() + "\n.vault-tasks-counter.json\n", "utf-8");
+        console.log("Updated: .gitignore (added .vault-tasks-counter.json)");
+      }
+    } else {
+      writeFileSync(gitignorePath, ".vault-tasks-counter.json\n", "utf-8");
+      console.log("Created: .gitignore");
     }
-  } else {
-    writeFileSync(gitignorePath, ".vault-tasks-counter.json\n", "utf-8");
-    console.log("Created: .gitignore");
   }
 
   console.log("\nvault-tasks initialized. Create your first task with:");

@@ -5,7 +5,7 @@ import type { Task } from "../task.js";
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
-    id: 1,
+    id: "0001",
     title: "Test task",
     status: "open",
     priority: "medium",
@@ -70,7 +70,7 @@ describe("formatTaskTable", () => {
   });
 
   it("includes header, divider, and task rows", () => {
-    const tasks = [makeTask({ id: 1, title: "Test", status: "open", priority: "high" })];
+    const tasks = [makeTask({ id: "0001", title: "Test", status: "open", priority: "high" })];
     const result = formatTaskTable(tasks);
     const lines = result.split("\n");
     assert.ok(lines[0].includes("ID"));
@@ -92,7 +92,7 @@ describe("formatStaleTable", () => {
   });
 
   it("includes header and task rows", () => {
-    const items = [{ task: makeTask({ id: 42, title: "Old task" }), ageDays: 30 }];
+    const items = [{ task: makeTask({ id: "0042", title: "Old task" }), ageDays: 30 }];
     const result = formatStaleTable(items);
     assert.ok(result.includes("42"));
     assert.ok(result.includes("30"));

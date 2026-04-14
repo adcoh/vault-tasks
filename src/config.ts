@@ -38,7 +38,7 @@ const DEFAULTS: Config = {
   defaultStatus: "open",
   archiveStatuses: ["done", "wont-do"],
   autoArchive: true,
-  idStrategy: "sequential",
+  idStrategy: "ulid",
   padWidth: 4,
   slugMaxLength: 60,
   project: {
@@ -281,8 +281,8 @@ archive_dir = "archive"           # relative to backlog_dir
 # auto_archive = true
 
 [id]
-# strategy = "sequential"         # "sequential" | "timestamp" | "ulid"
-# pad_width = 4                   # zero-pad width for sequential IDs
+# strategy = "ulid"               # "ulid" | "sequential" | "timestamp"
+# pad_width = 4                   # zero-pad width (only used with sequential)
 
 [slugify]
 # max_length = 60

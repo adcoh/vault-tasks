@@ -37,7 +37,7 @@ vt start 1
 vt done 1
 ```
 
-`vt init` creates a `.vault-tasks.toml` config and a `backlog/` directory. Tasks are markdown files like `0001-fix-login-redirect-bug.md`.
+`vt init` creates a `.vault-tasks.toml` config and a `backlog/` directory. Tasks are markdown files with ULID prefixes (e.g., `01HYX3KQPD7NG8RRGSSFQ9XNHY-fix-login-redirect-bug.md`). Sequential numeric IDs (`0001-...`) are also supported via config.
 
 ## Commands
 
@@ -56,7 +56,7 @@ vt done 1
 | `vt init` | Initialize config and backlog directory |
 | `vt install-skills` | Install Claude Code skills and rules. `--install`, `--list`, `--update` |
 
-Task lookup (`<id>`) accepts a numeric ID or a substring match against the filename.
+Task lookup (`<id>`) accepts a ULID prefix (e.g., `vt done 01HYX`), a numeric ID for sequential vaults (e.g., `vt done 1`), or a substring match against the filename (e.g., `vt done login`).
 
 ## Task format
 
@@ -107,8 +107,8 @@ archive_dir = "archive"           # relative to backlog_dir
 # auto_archive = true
 
 [id]
-# strategy = "sequential"         # "sequential" | "timestamp" | "ulid"
-# pad_width = 4                   # zero-pad width for sequential IDs
+# strategy = "ulid"               # "ulid" | "sequential" | "timestamp"
+# pad_width = 4                   # zero-pad width (only used with sequential)
 
 [slugify]
 # max_length = 60

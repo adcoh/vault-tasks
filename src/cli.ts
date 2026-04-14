@@ -37,6 +37,7 @@ Options (vary by command):
   --tags, -t            Comma-separated tags
   --source, -s          Where this was noticed
   --commit              Git commit after creating
+  --no-dedupe           Skip duplicate detection (new)
   --status              Filter or set status
   --tag                 Filter by tag
   --all, -a             Include done/archived tasks (list, search)
@@ -47,7 +48,7 @@ Options (vary by command):
   --help, -h            Show this help message
 `;
 
-const BOOLEAN_FLAGS = new Set(["all", "commit", "install", "list", "update", "help"]);
+const BOOLEAN_FLAGS = new Set(["all", "commit", "install", "list", "update", "help", "no-dedupe"]);
 
 function isFlag(arg: string): boolean {
   if (arg.startsWith("--")) return true;
@@ -162,6 +163,7 @@ function main(): void {
           tags: args["tags"] as string | undefined,
           source: args["source"] as string | undefined,
           commit: args["commit"] === true,
+          noDedupe: args["no-dedupe"] === true,
         });
         break;
 
