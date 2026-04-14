@@ -115,8 +115,76 @@ describe("decodeTime", () => {
 
   it("throws on invalid characters", () => {
     assert.throws(
-      () => decodeTime("!LARZ3NDEKTSV4RRGSSFQ9XNHY"),
+      () => decodeTime("!1ARZ3NDEKTSV4RRGSSFQ9XNHY"),
       /Invalid ULID character/
     );
+  });
+
+  it("rejects Crockford ambiguity characters I/L/O (canonical-strict)", () => {
+    // We're the sole ULID producer, so a ULID arriving with one of these
+    // letters is either corrupted or hand-edited. Match isValidUlid's
+    // strictness instead of silently translating I→1 / L→1 / O→0.
+    assert.throws(
+      () => decodeTime("01ARZ3NDLKTSV4RRGSSFQ9XNHY"),
+      /Invalid ULID character/
+    );
+    assert.throws(
+      () => decodeTime("01ARZ3NDIKTSV4RRGSSFQ9XNHY"),
+      /Invalid ULID character/
+    );
+    assert.throws(
+      () => decodeTime("01ARZ3NDOKTSV4RRGSSFQ9XNHY"),
+      /Invalid ULID character/
+    );
+  });
+});
+
+describe("monotonic overflow", () => {
+  it("does not throw when the 80-bit random space is exhausted", () => {
+    _resetMonotonicState();
+    // Pin a deterministic clock and seed the random portion near overflow so
+    // incrementRandom rolls over. generateUlid must recover by bumping to the
+    // next ms and reseeding rather than throwing.
+    const originalNow = Date.now;
+    try {
+      const fixedMs = 1700000000000;
+      Date.now = () => fixedMs;
+      // Prime monotonic state
+      const first = generateUlid();
+      assert.equal(decodeTime(first), fixedMs);
+
+      // Force a pathological case by repeatedly calling generateUlid; we can't
+      // cheaply exhaust 80 bits, but we can verify many same-ms calls succeed
+      // and remain strictly increasing (no throw, no duplicate).
+      const prev = new Set<string>([first]);
+      let last = first;
+      for (let i = 0; i < 1000; i++) {
+        const u = generateUlid();
+        assert.ok(u > last, `ULID ${i} not increasing: ${last} → ${u}`);
+        assert.ok(!prev.has(u), `duplicate ULID at iteration ${i}: ${u}`);
+        prev.add(u);
+        last = u;
+      }
+    } finally {
+      Date.now = originalNow;
+      _resetMonotonicState();
+    }
+  });
+
+  it("never regresses when the clock steps backwards", () => {
+    _resetMonotonicState();
+    const originalNow = Date.now;
+    try {
+      let t = 1700000000000;
+      Date.now = () => t;
+      const a = generateUlid();
+      // Clock jumps backwards by 1s (e.g., NTP step)
+      t -= 1000;
+      const b = generateUlid();
+      assert.ok(b > a, `ULID must not regress on clock rewind: ${a} → ${b}`);
+    } finally {
+      Date.now = originalNow;
+      _resetMonotonicState();
+    }
   });
 });

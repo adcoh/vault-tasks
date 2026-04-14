@@ -65,4 +65,30 @@ describe("similarity", () => {
     );
     assert.ok(score > 0.6, `Expected > 0.6 for near-duplicate but got ${score}`);
   });
+
+  it("handles diacritics by folding them to base letters", () => {
+    // Previously "café" normalized to empty after stripping non-ASCII. Now
+    // NFKD folding drops the combining acute so "café" and "cafe" compare as
+    // identical words.
+    assert.equal(similarity("café résumé", "cafe resume"), 1.0);
+    const score = similarity("café résumé important", "Cafe Resume Important");
+    assert.equal(score, 1.0);
+  });
+
+  it("preserves non-ASCII letters instead of discarding them", () => {
+    // Two titles that share only the non-ASCII word must still have non-zero
+    // similarity. Under the old ASCII-only normalize() both normalized to "".
+    const score = similarity("über cool thing", "über not cool");
+    assert.ok(score > 0.3, `Expected > 0.3 with shared über/cool, got ${score}`);
+  });
+
+  it("handles pure-emoji titles without throwing", () => {
+    const score = similarity("🚀🚀🚀", "🎉🎉🎉");
+    assert.ok(score >= 0 && score <= 1, `Expected valid score, got ${score}`);
+  });
+
+  it("scores zero for one-empty-one-nonempty after normalization", () => {
+    // Title that normalizes to empty (pure punctuation) vs real content
+    assert.equal(similarity("!!!", "Real task"), 0.0);
+  });
 });

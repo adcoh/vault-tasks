@@ -253,4 +253,25 @@ tags:
     const { meta: parsed } = parseFrontmatter(written);
     assert.deepEqual(parsed["sources"], ["[[note1]]", "[[note2]]"]);
   });
+
+  it("round-trips a ULID-shaped id string without numeric coercion", () => {
+    // ULIDs are all-uppercase Crockford base32; they must round-trip as a
+    // plain string, not be coerced to a number or YAML-quoted unnecessarily.
+    const ulid = "01HYXABCDEFGHJKMNPQRSTVWXY";
+    const { meta: parsed } = parseFrontmatter(
+      writeFrontmatter({ id: ulid, title: "t" }, "body")
+    );
+    assert.equal(parsed["id"], ulid);
+    assert.equal(typeof parsed["id"], "string");
+  });
+
+  it("round-trips a purely-numeric id string without becoming a number", () => {
+    // A numeric task ID like "42" must survive write/parse as a string so
+    // callers comparing `task.id === "42"` still succeed.
+    const { meta: parsed } = parseFrontmatter(
+      writeFrontmatter({ id: "42", title: "t" }, "body")
+    );
+    assert.equal(parsed["id"], "42");
+    assert.equal(typeof parsed["id"], "string");
+  });
 });

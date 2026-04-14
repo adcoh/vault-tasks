@@ -14,19 +14,16 @@ import { randomBytes } from "node:crypto";
 const ENCODING = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const ENCODING_LEN = ENCODING.length; // 32
 
-// Crockford base32 decoding table (case-insensitive, handles I→1, L→1, O→0)
+// Canonical Crockford base32 decoding table. We reject I, L, O (and U) as
+// invalid rather than translating them: since this module is the sole producer
+// of ULIDs in the vault, any ULID we encounter that contains those letters is
+// either corrupted or hand-edited — treating it as "probably 0/1" silently
+// papers over a real problem. Stay strict and fail loudly.
 const DECODE: Record<string, number> = {};
 for (let i = 0; i < ENCODING.length; i++) {
   DECODE[ENCODING[i]] = i;
   DECODE[ENCODING[i].toLowerCase()] = i;
 }
-// Crockford spec: I/i→1, L/l→1, O/o→0
-DECODE["I"] = 1;
-DECODE["i"] = 1;
-DECODE["L"] = 1;
-DECODE["l"] = 1;
-DECODE["O"] = 0;
-DECODE["o"] = 0;
 
 // Monotonic state
 let lastTime = 0;
@@ -56,7 +53,7 @@ function encodeRandom(len: number): number[] {
   return chars;
 }
 
-function incrementRandom(random: number[]): number[] {
+function incrementRandom(random: number[]): number[] | null {
   const next = [...random];
   for (let i = next.length - 1; i >= 0; i--) {
     if (next[i] < ENCODING_LEN - 1) {
@@ -65,8 +62,9 @@ function incrementRandom(random: number[]): number[] {
     }
     next[i] = 0;
   }
-  // Overflow — all 80 bits were maxed. Astronomically unlikely.
-  throw new Error("ULID random overflow: cannot increment within same millisecond");
+  // All 80 random bits maxed — astronomically unlikely, but signal overflow
+  // to the caller instead of throwing, so it can bump lastTime by 1 ms.
+  return null;
 }
 
 function randomCharsToString(chars: number[]): string {
@@ -78,15 +76,24 @@ function randomCharsToString(chars: number[]): string {
  */
 export function generateUlid(): string {
   const now = Date.now();
+  // Guard against clock skew (NTP step backwards): never let lastTime regress.
+  const effective = now > lastTime ? now : lastTime;
 
-  if (now === lastTime) {
-    lastRandom = incrementRandom(lastRandom);
+  if (effective === lastTime) {
+    const incremented = incrementRandom(lastRandom);
+    if (incremented === null) {
+      // 80-bit space exhausted in a single ms — bump to the next ms and reseed.
+      lastTime = effective + 1;
+      lastRandom = encodeRandom(16);
+    } else {
+      lastRandom = incremented;
+    }
   } else {
-    lastTime = now;
+    lastTime = effective;
     lastRandom = encodeRandom(16);
   }
 
-  return encodeTime(now, 10) + randomCharsToString(lastRandom);
+  return encodeTime(lastTime, 10) + randomCharsToString(lastRandom);
 }
 
 const VALID_ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;

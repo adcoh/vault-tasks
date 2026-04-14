@@ -76,7 +76,23 @@ function parseArgs(argv: string[]): { command: string; args: Record<string, stri
 
     if (arg.startsWith("--") && arg.includes("=")) {
       const eqIdx = arg.indexOf("=");
-      args[arg.slice(2, eqIdx)] = arg.slice(eqIdx + 1);
+      const key = arg.slice(2, eqIdx);
+      const rawValue = arg.slice(eqIdx + 1);
+      if (BOOLEAN_FLAGS.has(key)) {
+        const lower = rawValue.toLowerCase();
+        if (lower === "true" || lower === "1" || lower === "") {
+          args[key] = true;
+        } else if (lower === "false" || lower === "0") {
+          args[key] = false;
+        } else {
+          throw new Error(
+            `Flag --${key} is boolean; expected true/false/1/0 but got '${rawValue}'. ` +
+            `Either pass --${key} on its own, or use --${key}=true / --${key}=false.`
+          );
+        }
+      } else {
+        args[key] = rawValue;
+      }
       i++;
       continue;
     }
@@ -128,7 +144,16 @@ function main(): void {
     return;
   }
 
-  const { command, args, positional } = parseArgs(rawArgs);
+  let command: string;
+  let args: Record<string, string | boolean>;
+  let positional: string[];
+  try {
+    ({ command, args, positional } = parseArgs(rawArgs));
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exitCode = 1;
+    return;
+  }
 
   // init doesn't need config
   if (command === "init") {
@@ -136,9 +161,17 @@ function main(): void {
     return;
   }
 
+  let config;
+  try {
+    config = loadConfig();
+  } catch (err) {
+    console.error((err as Error).message);
+    process.exitCode = 1;
+    return;
+  }
+
   // install-skills needs vault root but not necessarily a full config
   if (command === "install-skills") {
-    const config = loadConfig();
     cmdInstallSkills(config, {
       install: args["install"] === true,
       list: args["list"] === true,
@@ -146,8 +179,6 @@ function main(): void {
     });
     return;
   }
-
-  const config = loadConfig();
 
   try {
     switch (command) {

@@ -25,11 +25,32 @@ const KNOWN_META_KEYS = new Set([
   "source",
 ]);
 
+// Strict ID prefix for a task filename. Matches:
+//   - Canonical ULID (26-char Crockford base32, no I/L/O/U)
+//   - Numeric prefix (sequential or 14-digit timestamp)
+// The `.md` suffix check is the caller's responsibility.
+//
+// Keeping this strict means non-task files (README.md, notes-about-x.md, etc.)
+// sitting in the backlog or archive directory don't silently get picked up by
+// listing, searching, ID lookup, or dedupe.
+const TASK_ID_RE = /^(\d+|[0-9A-HJKMNP-TV-Z]{26})-[^/]*\.md$/i;
+
+/** Return the ID prefix of a task filename, or null if it doesn't look like a task. */
+export function parseTaskIdFromFilename(name: string): string | null {
+  const m = name.match(TASK_ID_RE);
+  return m ? m[1] : null;
+}
+
+/** True if an identifier is a plausible ULID prefix (canonical Crockford, >= 4 chars). */
+function looksLikeUlidPrefix(s: string): boolean {
+  return s.length >= 4 && /^[0-9A-HJKMNP-TV-Z]+$/i.test(s) && !/^\d+$/.test(s);
+}
+
 function fileToTask(filePath: string, text: string): Task {
   const { meta, body } = parseFrontmatter(text);
-  const name = basename(filePath) ?? "";
+  const name = basename(filePath);
   const stem = name.replace(/\.md$/, "");
-  const idMatch = name.match(/^([0-9A-Za-z]+)-/);
+  const id = parseTaskIdFromFilename(name);
 
   const extraMeta: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(meta)) {
@@ -49,7 +70,7 @@ function fileToTask(filePath: string, text: string): Task {
   }
 
   return {
-    id: idMatch ? idMatch[1] : "",
+    id: id ?? "",
     title: String(meta["title"] ?? "") || stem,
     status: String(meta["status"] ?? "") || "open",
     priority: String(meta["priority"] ?? "") || "medium",
@@ -90,7 +111,7 @@ export class TaskStore {
   private listMdFiles(dir: string): string[] {
     if (!existsSync(dir)) return [];
     return readdirSync(dir)
-      .filter((f) => /^[0-9A-Za-z]+-.*\.md$/.test(f))
+      .filter((f) => parseTaskIdFromFilename(f) !== null)
       .sort()
       .map((f) => join(dir, f));
   }
@@ -165,40 +186,91 @@ export class TaskStore {
     return tasks;
   }
 
+  /**
+   * Load at most `limit` tasks, preferring the most recent. Filenames are
+   * time-sortable (ULID timestamp prefix or monotonic sequential ID), so
+   * alphabetic sort approximates chronological order.
+   *
+   * Used to bound O(N) dedupe scans on mature vaults. Pass `limit = 0` to
+   * disable the cap (equivalent to `loadAll(includeArchived)`).
+   */
+  loadRecent(limit: number, includeArchived = false): Task[] {
+    this.ensureBacklogDir();
+    const paths: string[] = [...this.listMdFiles(this.config.backlogDir)];
+    if (includeArchived) {
+      paths.push(...this.listMdFiles(this.config.archiveDir));
+    }
+    paths.sort();
+    const slice = limit > 0 ? paths.slice(-limit) : paths;
+    return slice.map((f) => fileToTask(f, readFileSync(f, "utf-8")));
+  }
+
   private matchInDir(identifier: string, dir: string): Task | null {
     const files = this.listMdFiles(dir);
 
-    // Try zero-padded numeric prefix match (backwards compat: `vt done 1` → `0001-...`)
-    const numId = parseInt(identifier, 10);
-    if (!isNaN(numId) && String(numId) === identifier) {
-      const prefix = String(numId).padStart(this.config.padWidth, "0") + "-";
-      const match = files.find((f) => basename(f)?.startsWith(prefix));
-      if (match) {
-        return fileToTask(match, readFileSync(match, "utf-8"));
+    const ambiguous = (matches: string[]): Error => {
+      const names = matches.map((m) => basename(m));
+      return new Error(
+        `Ambiguous match for '${identifier}' — ${matches.length} candidates:\n` +
+        `${names.map((n) => `  ${n}`).join("\n")}\n` +
+        `Use more characters of the ID, or the full filename stem.`
+      );
+    };
+
+    // 1. Purely-digit identifiers take the numeric branch exclusively. This
+    //    prevents a short string like "01" (parseInt = 1, not a valid numeric
+    //    match) from silently falling through to the ULID-prefix branch and
+    //    returning an arbitrary ULID task whose ID happens to start with "01"
+    //    (which is true for virtually every ULID from 2016–2039).
+    if (/^\d+$/.test(identifier)) {
+      const numId = parseInt(identifier, 10);
+      if (Number.isSafeInteger(numId)) {
+        // Accept the identifier as typed (e.g. "0001-*") and also zero-padded
+        // to padWidth (so "1" finds "0001-*" with padWidth=4).
+        const candidatePrefixes = new Set<string>([
+          `${identifier}-`,
+          `${String(numId).padStart(this.config.padWidth, "0")}-`,
+        ]);
+        const numericMatches = files.filter((f) => {
+          const name = basename(f);
+          for (const p of candidatePrefixes) {
+            if (name.startsWith(p)) return true;
+          }
+          return false;
+        });
+        if (numericMatches.length === 1) {
+          return fileToTask(numericMatches[0], readFileSync(numericMatches[0], "utf-8"));
+        }
+        if (numericMatches.length > 1) {
+          throw ambiguous(numericMatches);
+        }
+      }
+      // Deliberately do NOT fall through to the ULID-prefix branch: a digit-only
+      // identifier is unambiguously a numeric ID request, and silently matching
+      // a ULID that happens to share the same digit prefix would be a data bug.
+      return null;
+    }
+
+    // 2. ULID prefix match (case-insensitive). Requires at least 4 characters
+    //    of canonical Crockford base32 to avoid trivial collisions.
+    if (looksLikeUlidPrefix(identifier)) {
+      const upperIdent = identifier.toUpperCase();
+      const prefixMatches = files.filter((f) => {
+        const fileId = parseTaskIdFromFilename(basename(f));
+        return fileId !== null && fileId.toUpperCase().startsWith(upperIdent);
+      });
+      if (prefixMatches.length === 1) {
+        return fileToTask(prefixMatches[0], readFileSync(prefixMatches[0], "utf-8"));
+      }
+      if (prefixMatches.length > 1) {
+        throw ambiguous(prefixMatches);
       }
     }
 
-    // Try case-insensitive ID prefix match (handles ULID prefixes: `vt done 01HYX`)
-    const upperIdent = identifier.toUpperCase();
-    const prefixMatches = files.filter((f) => {
-      const name = basename(f) ?? "";
-      const fileId = name.match(/^([0-9A-Za-z]+)-/);
-      return fileId && fileId[1].toUpperCase().startsWith(upperIdent);
-    });
-    if (prefixMatches.length === 1) {
-      return fileToTask(prefixMatches[0], readFileSync(prefixMatches[0], "utf-8"));
-    }
-    if (prefixMatches.length > 1) {
-      const names = prefixMatches.map((m) => basename(m));
-      throw new Error(
-        `Ambiguous match for '${identifier}':\n${names.map((n) => `  ${n}`).join("\n")}`
-      );
-    }
-
-    // Substring match on filename
+    // 3. Substring match on filename stem.
     const query = identifier.toLowerCase();
     const matches = files.filter((f) => {
-      const name = basename(f)?.replace(/\.md$/, "") ?? "";
+      const name = basename(f).replace(/\.md$/, "");
       return name.toLowerCase().includes(query);
     });
 
@@ -206,10 +278,7 @@ export class TaskStore {
       return fileToTask(matches[0], readFileSync(matches[0], "utf-8"));
     }
     if (matches.length > 1) {
-      const names = matches.map((m) => basename(m));
-      throw new Error(
-        `Ambiguous match for '${identifier}':\n${names.map((n) => `  ${n}`).join("\n")}`
-      );
+      throw ambiguous(matches);
     }
 
     return null;

@@ -3,8 +3,6 @@ import type { Config } from "../config.js";
 import { similarity } from "../similarity.js";
 import { TaskStore } from "../store.js";
 
-const SIMILARITY_THRESHOLD = 0.5;
-
 export function cmdNew(
   config: Config,
   args: {
@@ -21,14 +19,16 @@ export function cmdNew(
     ? args.tags.split(",").map((t) => t.trim())
     : [];
 
-  // Check for similar existing tasks before creating
+  // Check for similar existing tasks before creating. Bounded by
+  // `dedupeScanLimit` so large archives don't turn every `vt new` into an
+  // O(N) disk walk.
   if (!args.noDedupe) {
-    const existing = store.loadAll(true);
+    const existing = store.loadRecent(config.dedupeScanLimit, true);
     const similar: Array<{ title: string; id: string; score: number }> = [];
 
     for (const task of existing) {
       const score = similarity(args.title, task.title);
-      if (score >= SIMILARITY_THRESHOLD) {
+      if (score >= config.dedupeThreshold) {
         similar.push({ title: task.title, id: task.id, score });
       }
     }

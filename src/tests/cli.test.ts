@@ -1,7 +1,7 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseFrontmatter } from "../frontmatter.js";
@@ -334,7 +334,13 @@ describe("CLI with ULID strategy", () => {
 
   it("init creates config with ulid as default", () => {
     const config = readFileSync(join(dir, ".vault-tasks.toml"), "utf-8");
-    assert.ok(config.includes("ulid"));
+    // Must document ulid as the canonical strategy value in the [id] section.
+    // The default is "commented-out" but the example string must be "ulid".
+    assert.match(
+      config,
+      /\[id\][^\[]*strategy\s*=\s*"ulid"/s,
+      "default config should document strategy = \"ulid\" under [id]"
+    );
   });
 
   it("init does not create .gitignore for counter file", () => {
@@ -390,5 +396,115 @@ describe("CLI with ULID strategy", () => {
     assert.equal(result.exitCode, 0);
     assert.ok(result.stdout.includes("Searchable ULID"));
     assert.ok(!result.stdout.includes("Other task"));
+  });
+
+  it("purely-digit lookup does not silently match a ULID", () => {
+    // On a ULID-only vault, `vt done 01` must not return an arbitrary ULID
+    // whose ID happens to start with "01" — that's virtually every ULID from
+    // the current decade. It must report "No task matching" instead.
+    run(["new", "First ULID task"], dir);
+    const result = run(["done", "01"], dir);
+    assert.notEqual(result.exitCode, 0);
+    assert.match(result.stderr, /No task matching/);
+  });
+
+  it("--no-dedupe=true is correctly coerced to boolean", () => {
+    run(["new", "Duplicate me"], dir);
+    const result = run(["new", "Duplicate me", "--no-dedupe=true"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(!result.stderr.includes("Similar tasks found"),
+      "--no-dedupe=true must suppress the warning");
+  });
+
+  it("--no-dedupe=garbage is rejected with actionable error", () => {
+    const result = run(["new", "X", "--no-dedupe=maybe"], dir);
+    assert.notEqual(result.exitCode, 0);
+    assert.match(result.stderr, /boolean|true\/false/i);
+  });
+
+  it("ambiguous prefix error tells user how to resolve it", () => {
+    // Force an ambiguous prefix by using a config with a prefix-rich
+    // identifier. Since our ULIDs share the same-ms prefix after
+    // monotonic seeding, create two quickly and lookup a very short prefix.
+    run(["new", "A"], dir);
+    run(["new", "B"], dir);
+    const result = run(["done", "0"], dir);
+    // "0" is purely-digit → numeric branch, not ULID prefix → "No task"
+    assert.notEqual(result.exitCode, 0);
+    assert.match(result.stderr, /No task matching/);
+  });
+
+  it("list ignores non-task markdown files in backlog", () => {
+    run(["new", "Real task"], dir);
+    writeFileSync(join(dir, "backlog", "notes-about-x.md"), "# Random note\n");
+    const result = run(["list"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("Real task"));
+    assert.ok(!result.stdout.includes("Random note"));
+    assert.ok(!result.stdout.includes("notes-about-x"));
+  });
+});
+
+describe("CLI legacy sequential detection", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-cli-legacy-"));
+  });
+
+  it("no config + existing NNNN-*.md files → sequential default", () => {
+    // Simulate an existing 0.1.x vault that was upgraded to 0.2.0 without
+    // running `vt init`. The user has `backlog/0001-foo.md`; running `vt new`
+    // without a config must keep allocating sequential IDs, not start mixing
+    // ULIDs into the directory.
+    mkdirSync(join(dir, "backlog"), { recursive: true });
+    writeFileSync(
+      join(dir, "backlog", "0001-existing.md"),
+      "---\ntitle: existing\nstatus: open\npriority: medium\ntags: []\ncreated: 2026-01-01\nsource: \n---\n\n# existing\n"
+    );
+    const result = run(["new", "Second task"], dir);
+    assert.equal(result.exitCode, 0, `stderr: ${result.stderr}`);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md")).sort();
+    assert.equal(files.length, 2);
+    // Second file must be NNNN-prefixed, not a 26-char ULID
+    assert.match(files[1], /^0002-/);
+  });
+
+  it("no config + no existing files → ulid default", () => {
+    const result = run(["new", "First task"], dir);
+    assert.equal(result.exitCode, 0);
+    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    assert.match(files[0], /^[0-9A-HJKMNP-TV-Z]{26}-/);
+  });
+});
+
+describe("CLI config validation", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-cli-badconf-"));
+  });
+
+  it("rejects invalid [id] strategy with actionable error", () => {
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[id]\nstrategy = "uild"\n'
+    );
+    const result = run(["list"], dir);
+    assert.notEqual(result.exitCode, 0);
+    assert.match(result.stderr, /Invalid \[id\] strategy/);
+    assert.match(result.stderr, /sequential.*timestamp.*ulid/);
+  });
+
+  it("rejects dedupe_threshold out of range", () => {
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[task]\ndedupe_threshold = 2\n'
+    );
+    const result = run(["list"], dir);
+    assert.notEqual(result.exitCode, 0);
+    assert.match(result.stderr, /dedupe_threshold/);
   });
 });

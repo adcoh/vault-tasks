@@ -6,12 +6,17 @@
  */
 
 /**
- * Normalize a string for comparison: lowercase, strip punctuation, collapse whitespace.
+ * Normalize a string for comparison: lowercase, fold diacritics, strip
+ * punctuation, collapse whitespace. Uses Unicode letter/number classes so
+ * non-ASCII titles (e.g. "café résumé") still produce meaningful trigrams
+ * instead of degenerate empty strings.
  */
 function normalize(s: string): string {
   return s
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "") // drop combining marks (diacritics)
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
     .replace(/\s+/g, " ")
     .trim();
 }

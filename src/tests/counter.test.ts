@@ -23,6 +23,8 @@ function makeConfig(dir: string, strategy: Config["idStrategy"] = "sequential"):
     idStrategy: strategy,
     padWidth: 4,
     slugMaxLength: 60,
+    dedupeThreshold: 0.5,
+    dedupeScanLimit: 500,
     project: { name: "", qualityCommand: "", testCommand: "", standardTags: [] },
   };
 }
