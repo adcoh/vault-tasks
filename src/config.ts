@@ -266,7 +266,8 @@ export function loadConfig(startDir?: string): Config {
   }
 
   const rawStrategy = id["strategy"];
-  let idStrategy: IdStrategy = DEFAULTS.idStrategy;
+  let idStrategy: IdStrategy;
+  let inferredPadWidth: number | null = null;
   if (rawStrategy !== undefined) {
     if (typeof rawStrategy !== "string" || !(ID_STRATEGIES as readonly string[]).includes(rawStrategy)) {
       throw new Error(
@@ -276,6 +277,17 @@ export function loadConfig(startDir?: string): Config {
       );
     }
     idStrategy = rawStrategy as IdStrategy;
+  } else {
+    // No explicit strategy. Mirror the no-config-file branch: if existing
+    // NNNN-*.md files are present, stay on sequential to avoid silently
+    // mixing ULIDs into a vault that was running on 0.1.x defaults.
+    const legacyWidth = detectLegacySequentialWidth(backlogDir);
+    if (legacyWidth !== null) {
+      idStrategy = "sequential";
+      inferredPadWidth = legacyWidth;
+    } else {
+      idStrategy = DEFAULTS.idStrategy;
+    }
   }
 
   const rawThreshold = task["dedupe_threshold"];
@@ -318,7 +330,9 @@ export function loadConfig(startDir?: string): Config {
     archiveStatuses: (task["archive_statuses"] as string[]) ?? DEFAULTS.archiveStatuses,
     autoArchive: (task["auto_archive"] as boolean) ?? DEFAULTS.autoArchive,
     idStrategy,
-    padWidth: (id["pad_width"] as number) ?? DEFAULTS.padWidth,
+    padWidth:
+      (id["pad_width"] as number) ??
+      (inferredPadWidth !== null ? Math.max(inferredPadWidth, DEFAULTS.padWidth) : DEFAULTS.padWidth),
     slugMaxLength: (slug["max_length"] as number) ?? DEFAULTS.slugMaxLength,
     dedupeThreshold,
     dedupeScanLimit,

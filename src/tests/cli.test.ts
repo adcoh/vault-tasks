@@ -478,6 +478,55 @@ describe("CLI legacy sequential detection", () => {
     assert.equal(files.length, 1);
     assert.match(files[0], /^[0-9A-HJKMNP-TV-Z]{26}-/);
   });
+
+  it("config without explicit strategy + existing NNNN-*.md → sequential", () => {
+    // The real 0.1.x upgrade footgun: a user ran `vt init` on 0.1.x, so they
+    // have a config file, but the file leaves `[id] strategy` commented out.
+    // Existing numbered tasks must keep numbering — not silently switch to
+    // ULID just because the new default flipped.
+    mkdirSync(join(dir, "backlog"), { recursive: true });
+    writeFileSync(
+      join(dir, "backlog", "0042-existing.md"),
+      "---\ntitle: existing\nstatus: open\npriority: medium\ntags: []\ncreated: 2026-01-01\nsource: \n---\n\n# existing\n"
+    );
+    // Config present, but no [id] section / no strategy key.
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[paths]\nbacklog_dir = "backlog"\narchive_dir = "archive"\n'
+    );
+
+    const result = run(["new", "Next task"], dir);
+    assert.equal(result.exitCode, 0, `stderr: ${result.stderr}`);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md")).sort();
+    assert.equal(files.length, 2);
+    assert.match(files[1], /^0043-/);
+  });
+
+  it("config with explicit strategy='ulid' + existing NNNN files → ulid (no override)", () => {
+    // The opposite case: the user has explicitly opted into ULID. We must
+    // respect that even though legacy NNNN files are present — the inference
+    // is only a fallback for unset strategy, not an override.
+    mkdirSync(join(dir, "backlog"), { recursive: true });
+    writeFileSync(
+      join(dir, "backlog", "0001-old.md"),
+      "---\ntitle: old\nstatus: open\npriority: medium\ntags: []\ncreated: 2026-01-01\nsource: \n---\n\n# old\n"
+    );
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[paths]\nbacklog_dir = "backlog"\narchive_dir = "archive"\n\n[id]\nstrategy = "ulid"\n'
+    );
+
+    const result = run(["new", "New ulid"], dir);
+    assert.equal(result.exitCode, 0);
+    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md")).sort();
+    assert.equal(files.length, 2);
+    // New file must be a ULID, not 0002
+    assert.ok(
+      /^[0-9A-HJKMNP-TV-Z]{26}-/.test(files[0]) || /^[0-9A-HJKMNP-TV-Z]{26}-/.test(files[1]),
+      `Expected one ULID file in ${files.join(", ")}`
+    );
+  });
 });
 
 describe("CLI config validation", () => {
