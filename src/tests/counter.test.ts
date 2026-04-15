@@ -23,6 +23,8 @@ function makeConfig(dir: string, strategy: Config["idStrategy"] = "sequential"):
     idStrategy: strategy,
     padWidth: 4,
     slugMaxLength: 60,
+    dedupeThreshold: 0.5,
+    dedupeScanLimit: 500,
     project: { name: "", qualityCommand: "", testCommand: "", standardTags: [] },
   };
 }
@@ -35,10 +37,13 @@ describe("getNextId", () => {
     mkdirSync(join(dir, "backlog"), { recursive: true });
   });
 
-  it("returns 1 for empty directory (sequential)", () => {
+  it("returns '1' for empty directory (sequential)", () => {
     const config = makeConfig(dir, "sequential");
     const id = getNextId(config);
-    assert.equal(id, 1);
+    assert.equal(typeof id, "string");
+    assert.equal(id, "1");
+    // formatId handles zero-padding
+    assert.equal(formatId(id, config), "0001");
   });
 
   it("returns max+1 when files exist (sequential)", () => {
@@ -46,7 +51,8 @@ describe("getNextId", () => {
     writeFileSync(join(dir, "backlog", "0003-task.md"), "");
     writeFileSync(join(dir, "backlog", "0001-task.md"), "");
     const id = getNextId(config);
-    assert.equal(id, 4);
+    assert.equal(id, "4");
+    assert.equal(formatId(id, config), "0004");
   });
 
   it("scans archive directory too (sequential)", () => {
@@ -55,7 +61,7 @@ describe("getNextId", () => {
     writeFileSync(join(dir, "backlog", "0001-task.md"), "");
     writeFileSync(join(dir, "backlog", "archive", "0005-old.md"), "");
     const id = getNextId(config);
-    assert.equal(id, 6);
+    assert.equal(id, "6");
   });
 
   it("ignores non-md files", () => {
@@ -63,27 +69,28 @@ describe("getNextId", () => {
     writeFileSync(join(dir, "backlog", "0010-readme.txt"), "");
     writeFileSync(join(dir, "backlog", "0002-task.md"), "");
     const id = getNextId(config);
-    assert.equal(id, 3);
+    assert.equal(id, "3");
   });
 
-  it("returns a numeric ID (timestamp strategy)", () => {
+  it("returns a 14-char string (timestamp strategy)", () => {
     const config = makeConfig(dir, "timestamp");
     const id = getNextId(config);
-    assert.equal(typeof id, "number");
-    assert.ok(id > 20000000000000, "timestamp ID should be 14 digits");
-    assert.ok(Number.isSafeInteger(id), "ID must be a safe integer");
+    assert.equal(typeof id, "string");
+    assert.equal(id.length, 14, "timestamp ID should be 14 digits");
+    assert.match(id, /^\d{14}$/);
   });
 
-  it("returns a numeric ID (ulid strategy)", () => {
+  it("returns a valid ULID string (ulid strategy)", () => {
     const config = makeConfig(dir, "ulid");
     const id = getNextId(config);
-    assert.equal(typeof id, "number");
-    assert.ok(Number.isSafeInteger(id), "ID must be a safe integer");
+    assert.equal(typeof id, "string");
+    assert.equal(id.length, 26, "ULID should be 26 characters");
+    assert.match(id, /^[0-9A-HJKMNP-TV-Z]{26}$/);
   });
 
   it("generates unique IDs on rapid calls (sequential)", () => {
     const config = makeConfig(dir, "sequential");
-    const ids = new Set<number>();
+    const ids = new Set<string>();
     for (let i = 0; i < 10; i++) {
       ids.add(getNextId(config));
       // Simulate a file being created with that ID
@@ -102,19 +109,19 @@ describe("formatId", () => {
 
   it("pads sequential IDs to padWidth", () => {
     const config = makeConfig(dir, "sequential");
-    assert.equal(formatId(1, config), "0001");
-    assert.equal(formatId(42, config), "0042");
-    assert.equal(formatId(12345, config), "12345");
+    assert.equal(formatId("1", config), "0001");
+    assert.equal(formatId("42", config), "0042");
+    assert.equal(formatId("12345", config), "12345");
   });
 
   it("does not pad timestamp IDs", () => {
     const config = makeConfig(dir, "timestamp");
-    assert.equal(formatId(20260331142300, config), "20260331142300");
+    assert.equal(formatId("20260331142300", config), "20260331142300");
   });
 
   it("does not pad ulid IDs", () => {
     const config = makeConfig(dir, "ulid");
-    const id = 1234567890123;
-    assert.equal(formatId(id, config), "1234567890123");
+    const id = "01HYX3KQPD7NG8RRGSSFQ9XNHY";
+    assert.equal(formatId(id, config), id);
   });
 });

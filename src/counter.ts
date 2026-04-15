@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { randomInt } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Config } from "./config.js";
+import { generateUlid } from "./ulid.js";
 
 /**
  * Scan backlog + archive directories for the highest numeric ID prefix.
@@ -72,7 +72,7 @@ function getCounterPath(config: Config): string {
  * TaskStore.create(), which uses exclusive file creation (wx flag) with retry
  * to detect and recover from collisions.
  */
-function getNextSequentialId(config: Config): number {
+function getNextSequentialId(config: Config): string {
   const fileMax = scanMaxId(config);
   const counterPath = getCounterPath(config);
 
@@ -92,13 +92,13 @@ function getNextSequentialId(config: Config): number {
     // Best effort — file scan fallback will still work
   }
 
-  return nextId;
+  return String(nextId);
 }
 
 /**
  * Generate a timestamp-based ID: YYYYMMDDHHMMss
  */
-function getTimestampId(): number {
+function getTimestampId(): string {
   const now = new Date();
   const parts = [
     now.getFullYear(),
@@ -108,53 +108,32 @@ function getTimestampId(): number {
     String(now.getMinutes()).padStart(2, "0"),
     String(now.getSeconds()).padStart(2, "0"),
   ];
-  return parseInt(parts.join(""), 10);
-}
-
-/**
- * Generate a ULID-like sortable ID (simplified: timestamp + random suffix).
- * Not a full ULID spec implementation, but collision-resistant and sortable.
- * Uses crypto.randomInt() for better randomness and validates safe integer range.
- */
-function getUlidId(): number {
-  // Use last 7 digits of timestamp (covers ~115 days) + 6 random digits = 13 digits max.
-  // Number.MAX_SAFE_INTEGER is 9007199254740991 (16 digits), so 13 digits is always safe.
-  // Retry loop guards against any edge case where the result is not a safe integer.
-  for (let attempt = 0; attempt < 10; attempt++) {
-    const timestamp = Date.now() % 10000000; // 7 digits
-    const random = randomInt(0, 1000000); // 6 digits: 0–999999
-    const id = parseInt(`${timestamp}${String(random).padStart(6, "0")}`, 10);
-    if (Number.isSafeInteger(id)) {
-      return id;
-    }
-  }
-  // Fallback: should never reach here, but return a safe value if it does
-  return Date.now() % 10000000000;
+  return parts.join("");
 }
 
 /**
  * Get the next task ID based on the configured strategy.
  */
-export function getNextId(config: Config): number {
+export function getNextId(config: Config): string {
   switch (config.idStrategy) {
     case "sequential":
       return getNextSequentialId(config);
     case "timestamp":
       return getTimestampId();
     case "ulid":
-      return getUlidId();
+      return generateUlid();
     default:
       return getNextSequentialId(config);
   }
 }
 
 /**
- * Format an ID for use in filenames, respecting pad width.
+ * Format an ID for use in filenames. For sequential, pads to padWidth.
+ * For timestamp and ULID, returns as-is (already formatted).
  */
-export function formatId(id: number, config: Config): string {
+export function formatId(id: string, config: Config): string {
   if (config.idStrategy === "sequential") {
-    return String(id).padStart(config.padWidth, "0");
+    return id.padStart(config.padWidth, "0");
   }
-  // Timestamp and ULID IDs are already long enough
-  return String(id);
+  return id;
 }

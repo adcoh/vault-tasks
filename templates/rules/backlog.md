@@ -4,7 +4,7 @@ globs: {{backlog_dir}}/**
 
 # Backlog Rules
 
-- One task per file in `{{backlog_dir}}/`, named `NNNN-kebab-case-title.md`
+- One task per file in `{{backlog_dir}}/`, named `<id>-kebab-case-title.md` (ULID by default, or `NNNN` for sequential)
 - Required frontmatter: `title`, `status`, `priority`, `tags`, `created`, `source`
 - Status values: `open`, `in-progress`, `done`, `wont-do`
 - Priority values: `high`, `medium`, `low`

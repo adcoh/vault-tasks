@@ -6,7 +6,7 @@
  * that vault-tasks doesn't manage (e.g. `due`, `assignee`).
  */
 export interface Task {
-  id: number;
+  id: string;
   title: string;
   status: string;
   priority: string;

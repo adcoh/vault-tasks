@@ -1,5 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+
+export const ID_STRATEGIES = ["sequential", "timestamp", "ulid"] as const;
+export type IdStrategy = (typeof ID_STRATEGIES)[number];
 
 export interface Config {
   vaultRoot: string;
@@ -14,9 +17,11 @@ export interface Config {
   defaultStatus: string;
   archiveStatuses: string[];
   autoArchive: boolean;
-  idStrategy: "sequential" | "timestamp" | "ulid";
+  idStrategy: IdStrategy;
   padWidth: number;
   slugMaxLength: number;
+  dedupeThreshold: number;
+  dedupeScanLimit: number;
   project: {
     name: string;
     qualityCommand: string;
@@ -38,9 +43,11 @@ const DEFAULTS: Config = {
   defaultStatus: "open",
   archiveStatuses: ["done", "wont-do"],
   autoArchive: true,
-  idStrategy: "sequential",
+  idStrategy: "ulid",
   padWidth: 4,
   slugMaxLength: 60,
+  dedupeThreshold: 0.5,
+  dedupeScanLimit: 500,
   project: {
     name: "",
     qualityCommand: "",
@@ -175,6 +182,26 @@ export function parseToml(text: string): Record<string, unknown> {
 }
 
 /**
+ * Probe a backlog dir for legacy sequential IDs. Returns the widest zero-padded
+ * numeric prefix (pad width) if sequential-style files exist, else null.
+ *
+ * Used to keep existing 0.1.x vaults on the sequential strategy when no config
+ * file is present, rather than silently mixing ULID files alongside NNNN files.
+ */
+function detectLegacySequentialWidth(backlogDir: string): number | null {
+  if (!existsSync(backlogDir)) return null;
+  let widest = 0;
+  let found = false;
+  for (const name of readdirSync(backlogDir)) {
+    const m = name.match(/^(\d+)-.*\.md$/);
+    if (!m) continue;
+    found = true;
+    if (m[1].length > widest) widest = m[1].length;
+  }
+  return found ? widest : null;
+}
+
+/**
  * Load configuration by finding and parsing `.vault-tasks.toml`,
  * merged with defaults.
  */
@@ -183,14 +210,21 @@ export function loadConfig(startDir?: string): Config {
 
   if (!configFile) {
     const vaultRoot = resolve(startDir ?? process.cwd());
+    const backlogDir = resolve(vaultRoot, DEFAULTS.backlogDir);
+    // Keep legacy vaults (upgraded from 0.1.x without a config) on sequential
+    // so `vt new` keeps producing NNNN-* filenames instead of silently mixing
+    // ULIDs with the user's existing numbered tasks.
+    const legacyWidth = detectLegacySequentialWidth(backlogDir);
     return {
       ...DEFAULTS,
       vaultRoot,
-      backlogDir: resolve(vaultRoot, DEFAULTS.backlogDir),
+      backlogDir,
       archiveDir: resolve(vaultRoot, DEFAULTS.backlogDir, DEFAULTS.archiveDir),
       journalDir: resolve(vaultRoot, DEFAULTS.journalDir),
       projectsDir: resolve(vaultRoot, DEFAULTS.projectsDir),
       evergreenDir: resolve(vaultRoot, DEFAULTS.evergreenDir),
+      idStrategy: legacyWidth !== null ? "sequential" : DEFAULTS.idStrategy,
+      padWidth: legacyWidth !== null ? Math.max(legacyWidth, DEFAULTS.padWidth) : DEFAULTS.padWidth,
     };
   }
 
@@ -231,6 +265,57 @@ export function loadConfig(startDir?: string): Config {
     }
   }
 
+  const rawStrategy = id["strategy"];
+  let idStrategy: IdStrategy;
+  let inferredPadWidth: number | null = null;
+  if (rawStrategy !== undefined) {
+    if (typeof rawStrategy !== "string" || !(ID_STRATEGIES as readonly string[]).includes(rawStrategy)) {
+      throw new Error(
+        `Invalid [id] strategy: ${JSON.stringify(rawStrategy)}. ` +
+        `Must be one of: ${ID_STRATEGIES.join(", ")}. ` +
+        `Edit ${configFile} to fix.`
+      );
+    }
+    idStrategy = rawStrategy as IdStrategy;
+  } else {
+    // No explicit strategy. Mirror the no-config-file branch: if existing
+    // NNNN-*.md files are present, stay on sequential to avoid silently
+    // mixing ULIDs into a vault that was running on 0.1.x defaults.
+    const legacyWidth = detectLegacySequentialWidth(backlogDir);
+    if (legacyWidth !== null) {
+      idStrategy = "sequential";
+      inferredPadWidth = legacyWidth;
+    } else {
+      idStrategy = DEFAULTS.idStrategy;
+    }
+  }
+
+  const rawThreshold = task["dedupe_threshold"];
+  let dedupeThreshold = DEFAULTS.dedupeThreshold;
+  if (rawThreshold !== undefined) {
+    const n = typeof rawThreshold === "number" ? rawThreshold : Number(rawThreshold);
+    if (!Number.isFinite(n) || n < 0 || n > 1) {
+      throw new Error(
+        `Invalid [task] dedupe_threshold: ${JSON.stringify(rawThreshold)}. ` +
+        `Must be a number between 0 and 1.`
+      );
+    }
+    dedupeThreshold = n;
+  }
+
+  const rawScanLimit = task["dedupe_scan_limit"];
+  let dedupeScanLimit = DEFAULTS.dedupeScanLimit;
+  if (rawScanLimit !== undefined) {
+    const n = typeof rawScanLimit === "number" ? rawScanLimit : Number(rawScanLimit);
+    if (!Number.isInteger(n) || n < 0) {
+      throw new Error(
+        `Invalid [task] dedupe_scan_limit: ${JSON.stringify(rawScanLimit)}. ` +
+        `Must be a non-negative integer.`
+      );
+    }
+    dedupeScanLimit = n;
+  }
+
   return {
     vaultRoot,
     backlogDir,
@@ -244,9 +329,13 @@ export function loadConfig(startDir?: string): Config {
     defaultStatus: (task["default_status"] as string) ?? DEFAULTS.defaultStatus,
     archiveStatuses: (task["archive_statuses"] as string[]) ?? DEFAULTS.archiveStatuses,
     autoArchive: (task["auto_archive"] as boolean) ?? DEFAULTS.autoArchive,
-    idStrategy: (id["strategy"] as Config["idStrategy"]) ?? DEFAULTS.idStrategy,
-    padWidth: (id["pad_width"] as number) ?? DEFAULTS.padWidth,
+    idStrategy,
+    padWidth:
+      (id["pad_width"] as number) ??
+      (inferredPadWidth !== null ? Math.max(inferredPadWidth, DEFAULTS.padWidth) : DEFAULTS.padWidth),
     slugMaxLength: (slug["max_length"] as number) ?? DEFAULTS.slugMaxLength,
+    dedupeThreshold,
+    dedupeScanLimit,
     project: {
       name: (project["name"] as string) ?? "",
       qualityCommand: (project["quality_command"] as string) ?? "",
@@ -279,10 +368,12 @@ archive_dir = "archive"           # relative to backlog_dir
 # default_status = "open"
 # archive_statuses = ["done", "wont-do"]
 # auto_archive = true
+# dedupe_threshold = 0.5            # similarity 0..1 for duplicate warnings on vt new
+# dedupe_scan_limit = 500           # most-recent N tasks scanned for duplicates (0 = unlimited)
 
 [id]
-# strategy = "sequential"         # "sequential" | "timestamp" | "ulid"
-# pad_width = 4                   # zero-pad width for sequential IDs
+# strategy = "ulid"               # "ulid" | "sequential" | "timestamp"
+# pad_width = 4                   # zero-pad width (only used with sequential)
 
 [slugify]
 # max_length = 60

@@ -24,5 +24,5 @@ description: Create, list, or manage backlog tasks. Use when the user says "add 
 - When noticing something off-scope during a session, default to `priority: medium`, `status: open`
 - Always set `source` to link back to where the task was noticed
 - Prefer creating tasks over mental bookmarks — the backlog is cheap
-- The CLI supports both numeric ID lookup (`vt done 1`) and substring matching (`vt done lateral`)
+- The CLI supports ULID prefix lookup (`vt done 01HYX`), numeric ID lookup (`vt done 1`), and substring matching (`vt done lateral`)
 - Check `.vault-tasks.toml` `[project.tags]` for standard tags to use

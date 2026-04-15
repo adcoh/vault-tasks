@@ -4,7 +4,7 @@ import { mkdtempSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Config } from "../config.js";
-import { TaskStore } from "../store.js";
+import { parseTaskIdFromFilename, TaskStore } from "../store.js";
 
 function makeConfig(dir: string): Config {
   return {
@@ -23,6 +23,8 @@ function makeConfig(dir: string): Config {
     idStrategy: "sequential",
     padWidth: 4,
     slugMaxLength: 60,
+    dedupeThreshold: 0.5,
+    dedupeScanLimit: 500,
     project: { name: "", qualityCommand: "", testCommand: "", standardTags: [] },
   };
 }
@@ -38,7 +40,7 @@ describe("TaskStore", () => {
 
   it("creates a task", () => {
     const task = store.create({ title: "Test task" });
-    assert.equal(task.id, 1);
+    assert.equal(task.id, "0001");
     assert.equal(task.title, "Test task");
     assert.equal(task.status, "open");
     assert.equal(task.priority, "medium");
@@ -48,8 +50,8 @@ describe("TaskStore", () => {
   it("creates tasks with incrementing IDs", () => {
     const t1 = store.create({ title: "First" });
     const t2 = store.create({ title: "Second" });
-    assert.equal(t1.id, 1);
-    assert.equal(t2.id, 2);
+    assert.equal(t1.id, "0001");
+    assert.equal(t2.id, "0002");
   });
 
   it("loads all tasks", () => {
@@ -258,5 +260,103 @@ describe("TaskStore", () => {
     const reloaded = store.find("1");
     assert.equal(reloaded.status, "open");
     assert.equal(reloaded.extraMeta["custom_status"], "hacked");
+  });
+
+  it("ignores files with non-strict ID prefixes", () => {
+    store.create({ title: "Real task" });
+    // Filenames that look "task-like" but don't match strict ID formats
+    // (alphanumeric prefix but not a canonical ULID or a numeric ID) must be
+    // filtered out of listing, lookup, and dedupe.
+    mkdirSync(join(dir, "backlog"), { recursive: true });
+    writeFileSync(join(dir, "backlog", "notes-about-x.md"), "# notes\n");
+    writeFileSync(join(dir, "backlog", "README.md"), "# readme\n");
+    // ULID with illegal char (L) — should be rejected
+    writeFileSync(
+      join(dir, "backlog", "01ARZ3NDLKTSV4RRGSSFQ9XNHY-bad.md"),
+      "---\ntitle: bad\n---\n"
+    );
+
+    const tasks = store.loadAll();
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].title, "Real task");
+
+    // find() must not surface any of the non-task files by substring either
+    assert.throws(() => store.find("notes"), /No task matching/);
+    assert.throws(() => store.find("README"), /No task matching/);
+  });
+
+  it("ambiguous-match error includes next-step guidance", () => {
+    store.create({ title: "Fix login" });
+    store.create({ title: "Fix login page" });
+    try {
+      store.find("login");
+      assert.fail("expected an error");
+    } catch (err) {
+      const msg = (err as Error).message;
+      assert.match(msg, /Ambiguous match/);
+      assert.match(msg, /more characters|full filename/i);
+    }
+  });
+
+  it("loadRecent caps results at limit, preferring newest", () => {
+    for (let i = 0; i < 10; i++) {
+      store.create({ title: `Task ${i}` });
+    }
+    const recent = store.loadRecent(3);
+    assert.equal(recent.length, 3);
+    // Sequential IDs: 0008, 0009, 0010 are newest
+    assert.deepEqual(
+      recent.map((t) => t.id).sort(),
+      ["0008", "0009", "0010"]
+    );
+  });
+
+  it("loadRecent with limit=0 returns all tasks", () => {
+    store.create({ title: "A" });
+    store.create({ title: "B" });
+    const all = store.loadRecent(0);
+    assert.equal(all.length, 2);
+  });
+});
+
+describe("parseTaskIdFromFilename", () => {
+  it("accepts canonical ULID filenames", () => {
+    assert.equal(
+      parseTaskIdFromFilename("01HYXABCDEFGHJKMNPQRSTVWXY-title.md"),
+      "01HYXABCDEFGHJKMNPQRSTVWXY"
+    );
+  });
+
+  it("accepts sequential filenames", () => {
+    assert.equal(parseTaskIdFromFilename("0001-title.md"), "0001");
+    assert.equal(parseTaskIdFromFilename("42-title.md"), "42");
+  });
+
+  it("accepts 14-digit timestamp filenames", () => {
+    assert.equal(
+      parseTaskIdFromFilename("20260413120000-title.md"),
+      "20260413120000"
+    );
+  });
+
+  it("rejects ULIDs containing excluded chars (I/L/O/U)", () => {
+    // 26 chars but includes forbidden letters — must be rejected to keep
+    // lookup/list behavior consistent with the ULID generator's strictness.
+    assert.equal(
+      parseTaskIdFromFilename("01ARZ3NDLKTSV4RRGSSFQ9XNHY-x.md"),
+      null
+    );
+  });
+
+  it("rejects non-task markdown filenames", () => {
+    assert.equal(parseTaskIdFromFilename("notes-about-x.md"), null);
+    assert.equal(parseTaskIdFromFilename("README.md"), null);
+    assert.equal(parseTaskIdFromFilename("abc-def.md"), null);
+    assert.equal(parseTaskIdFromFilename(".hidden.md"), null);
+  });
+
+  it("rejects non-.md files", () => {
+    assert.equal(parseTaskIdFromFilename("0001-title.txt"), null);
+    assert.equal(parseTaskIdFromFilename("0001-title"), null);
   });
 });
