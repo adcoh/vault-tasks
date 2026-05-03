@@ -6,6 +6,7 @@ import { cmdDone } from "./commands/done.js";
 import { cmdEdit } from "./commands/edit.js";
 import { cmdInit } from "./commands/init.js";
 import { cmdInstallSkills } from "./commands/install-skills.js";
+import { cmdLint } from "./commands/lint.js";
 import { cmdList } from "./commands/list.js";
 import { cmdNew } from "./commands/new.js";
 import { cmdSearch } from "./commands/search.js";
@@ -29,6 +30,7 @@ Commands:
   edit <id>             Edit task fields (--status, --priority, --tags)
   archive               Move completed tasks to archive
   tags                  List all tags in use
+  lint                  Audit the vault for broken wikilinks, orphans, stale refs, drift
   init                  Initialize vault-tasks in current directory
   install-skills        Install Claude Code skills and rules
 
@@ -45,10 +47,26 @@ Options (vary by command):
   --days, -d            Stale threshold in days (default: 14)
   --list                List available skills
   --update              Overwrite existing skill files
+  --only                Run a single lint check (broken|orphans|stale|drift)
+  --scope               Restrict lint to files under <dir>
+  --json                Machine-readable lint output
+  --quiet               Print only the lint SUMMARY line
+  --no-suggestions      Skip "did you mean?" suggestions in lint
   --help, -h            Show this help message
 `;
 
-const BOOLEAN_FLAGS = new Set(["all", "commit", "install", "list", "update", "help", "no-dedupe"]);
+const BOOLEAN_FLAGS = new Set([
+  "all",
+  "commit",
+  "install",
+  "list",
+  "update",
+  "help",
+  "no-dedupe",
+  "json",
+  "quiet",
+  "no-suggestions",
+]);
 
 function isFlag(arg: string): boolean {
   if (arg.startsWith("--")) return true;
@@ -281,6 +299,33 @@ function main(): void {
       case "tags":
         cmdTags(config);
         break;
+
+      case "lint": {
+        // --only and --scope are value-bearing flags. parseArgs sets them to
+        // `true` if the user passes the flag without a value (e.g. `--only`
+        // followed by another flag or end-of-args), so coerce explicitly
+        // rather than asserting the type away.
+        const onlyArg = args["only"];
+        const scopeArg = args["scope"];
+        if (onlyArg === true) {
+          console.error("Error: --only requires a value (broken|orphans|stale|drift)");
+          process.exitCode = 2;
+          return;
+        }
+        if (scopeArg === true) {
+          console.error("Error: --scope requires a value (a directory)");
+          process.exitCode = 2;
+          return;
+        }
+        cmdLint(config, {
+          only: typeof onlyArg === "string" ? onlyArg : undefined,
+          scope: typeof scopeArg === "string" ? scopeArg : undefined,
+          json: args["json"] === true,
+          quiet: args["quiet"] === true,
+          noSuggestions: args["no-suggestions"] === true,
+        });
+        break;
+      }
 
       default:
         console.error(`Unknown command: ${command}\n`);

@@ -26,6 +26,22 @@ function makeConfig(dir: string, strategy: Config["idStrategy"] = "sequential"):
     dedupeThreshold: 0.5,
     dedupeScanLimit: 500,
     project: { name: "", qualityCommand: "", testCommand: "", standardTags: [] },
+    lint: {
+      referenceDir: join(dir, "references"),
+      referenceExclude: [],
+      templateSourceDirs: [],
+      templateSourceFiles: [],
+      templatePatterns: [],
+      skipDirs: [".git", "node_modules"],
+      evergreenConventions: {
+        requireFrontmatter: true,
+        requireTitleField: true,
+        requireTagsField: true,
+        requireRelatedSection: true,
+        requireBodyWikilink: true,
+      },
+      suggestionThreshold: 0.6,
+    },
   };
 }
 

@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented here.
 
+## 0.3.0
+
+### Added
+
+- **`vt lint`** — read-only audit of an Obsidian-style vault. Detects
+  broken wikilinks (with frequency aggregation and "did you mean?"
+  suggestions), orphan evergreens, stale references, and convention drift
+  on evergreens. Completes the Maintain pillar of the LLM-Wiki pattern
+  alongside `vt new` (Compile) and `vt stale`/`vt archive`.
+
+  Resolution is Obsidian-correct: case-insensitive,
+  whitespace/hyphen/underscore/colon-agnostic, resolves against filename
+  stem, full path, `title:` frontmatter, and `aliases:`. Path-form
+  (`[[10-areas/foo/CONTEXT]]`) and partial-tail (`[[parenting/CONTEXT]]`)
+  targets work. `|alias` and `#anchor` suffixes are stripped before
+  resolution.
+
+  CLI flags: `--only <check>`, `--scope <dir>`, `--json`, `--quiet`,
+  `--no-suggestions`. Exit codes: `0` clean, `1` issues, `2` config/I-O
+  error.
+
+  Per-file opt-outs via flat frontmatter keys: `lint_orphan_ok`,
+  `lint_stale_ok`, `lint_drift_ok`.
+
+  Configurable in `.vault-tasks.toml` under `[lint]` and
+  `[lint.evergreen_conventions]`.
+
+- **`/lint` skill template** installed by `vt install-skills --install`.
+  Wraps the CLI for a Claude Code conversation: presents findings,
+  suggests next actions, never auto-edits.
+
+- Library API: `lintVault`, `buildIndex`, `resolveTarget`,
+  `collectWikilinks`, `findBrokenLinks`, `findOrphanEvergreens`,
+  `findStaleReferences`, `findEvergreenDrift`, `attachSuggestions`,
+  `computeLeverageFixes`, plus the `LintReport` / `LintOptions` /
+  `WikiLink` / `VaultFile` types.
+
 ## 0.2.0
 
 ### Breaking — library API

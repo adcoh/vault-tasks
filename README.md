@@ -53,6 +53,7 @@ vt done 1
 | `vt stale` | List open tasks older than 14 days. `--days` to customize |
 | `vt archive` | Move all completed tasks to the archive directory |
 | `vt tags` | List all tags and their counts |
+| `vt lint` | Audit the vault: broken wikilinks, orphan evergreens, stale refs, drift. `--only`, `--scope`, `--json`, `--quiet`, `--no-suggestions` |
 | `vt init` | Initialize config and backlog directory |
 | `vt install-skills` | Install Claude Code skills and rules. `--install`, `--list`, `--update` |
 
@@ -132,6 +133,7 @@ This installs into `.claude/skills/` and `.claude/rules/`:
 | `/build-log` | End-of-session log: what was built, learned, decided. Extracts tasks |
 | `/weekly-review` | Consolidates journal entries, creates evergreen notes, triages backlog |
 | `/task` | Quick task creation/management from within a session |
+| `/lint` | Vault health check: broken wikilinks, orphans, stale refs, convention drift |
 
 Skills reference configurable vault paths (`journal_dir`, `projects_dir`, `evergreen_dir`) which are substituted from your `.vault-tasks.toml` at install time. Customize any skill by creating a `SKILL.local.md` next to the installed `SKILL.md` -- local files are never overwritten.
 
@@ -167,7 +169,12 @@ store.archiveCompleted();
 - `loadConfig` / `findConfigFile` -- config discovery and parsing
 - `parseFrontmatter` / `writeFrontmatter` -- YAML frontmatter utilities
 - `slugify` -- title to kebab-case filename
-- Types: `Task`, `CreateTaskOpts`, `Config`
+- `lintVault` -- run all lint checks; returns a `LintReport`
+- Lower-level lint primitives: `buildIndex`, `resolveTarget`,
+  `collectWikilinks`, `findBrokenLinks`, `findOrphanEvergreens`,
+  `findStaleReferences`, `findEvergreenDrift`, `attachSuggestions`
+- Types: `Task`, `CreateTaskOpts`, `Config`, `LintReport`, `LintOptions`,
+  `WikiLink`, `VaultFile`, `BrokenEntry`, `Suggestion`
 
 ## License
 
