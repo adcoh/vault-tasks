@@ -4,6 +4,25 @@ import { dirname, join, relative, resolve } from "node:path";
 export const ID_STRATEGIES = ["sequential", "timestamp", "ulid"] as const;
 export type IdStrategy = (typeof ID_STRATEGIES)[number];
 
+export interface LintEvergreenConventions {
+  requireFrontmatter: boolean;
+  requireTitleField: boolean;
+  requireTagsField: boolean;
+  requireRelatedSection: boolean;
+  requireBodyWikilink: boolean;
+}
+
+export interface LintConfig {
+  referenceDir: string;
+  referenceExclude: string[];
+  templateSourceDirs: string[];
+  templateSourceFiles: string[];
+  templatePatterns: string[];
+  skipDirs: string[];
+  evergreenConventions: LintEvergreenConventions;
+  suggestionThreshold: number;
+}
+
 export interface Config {
   vaultRoot: string;
   backlogDir: string;
@@ -28,7 +47,39 @@ export interface Config {
     testCommand: string;
     standardTags: string[];
   };
+  lint: LintConfig;
 }
+
+export const DEFAULT_LINT_TEMPLATE_PATTERNS: readonly string[] = [
+  "^YYYY",
+  "^<",
+  "^wikilinks?$",
+  "^target$",
+  "^note-name$",
+  "^build-log-title$",
+  "^filename",
+  "^\\d{4}-task-slug$",
+  "^Evergreen note title$",
+  "^0001-task-slug$",
+  "^0003-old-task$",
+];
+
+const DEFAULT_LINT: LintConfig = {
+  referenceDir: "references",
+  referenceExclude: ["tweets/"],
+  templateSourceDirs: [".claude/skills/", ".claude/rules/"],
+  templateSourceFiles: ["CLAUDE.md"],
+  templatePatterns: [...DEFAULT_LINT_TEMPLATE_PATTERNS],
+  skipDirs: [".obsidian", "node_modules", ".git", "dist", "build"],
+  evergreenConventions: {
+    requireFrontmatter: true,
+    requireTitleField: true,
+    requireTagsField: true,
+    requireRelatedSection: true,
+    requireBodyWikilink: true,
+  },
+  suggestionThreshold: 0.6,
+};
 
 const DEFAULTS: Config = {
   vaultRoot: process.cwd(),
@@ -54,6 +105,7 @@ const DEFAULTS: Config = {
     testCommand: "",
     standardTags: [],
   },
+  lint: DEFAULT_LINT,
 };
 
 const CONFIG_FILENAME = ".vault-tasks.toml";
@@ -225,6 +277,7 @@ export function loadConfig(startDir?: string): Config {
       evergreenDir: resolve(vaultRoot, DEFAULTS.evergreenDir),
       idStrategy: legacyWidth !== null ? "sequential" : DEFAULTS.idStrategy,
       padWidth: legacyWidth !== null ? Math.max(legacyWidth, DEFAULTS.padWidth) : DEFAULTS.padWidth,
+      lint: { ...DEFAULT_LINT },
     };
   }
 
@@ -238,6 +291,8 @@ export function loadConfig(startDir?: string): Config {
   const slug = (parsed["slugify"] ?? {}) as Record<string, unknown>;
   const project = (parsed["project"] ?? {}) as Record<string, unknown>;
   const projectTags = (project["tags"] ?? {}) as Record<string, unknown>;
+  const lint = (parsed["lint"] ?? {}) as Record<string, unknown>;
+  const lintConventions = (lint["evergreen_conventions"] ?? {}) as Record<string, unknown>;
 
   const backlogRel = (paths["backlog_dir"] as string) ?? DEFAULTS.backlogDir;
   const archiveRel = (paths["archive_dir"] as string) ?? DEFAULTS.archiveDir;
@@ -342,6 +397,69 @@ export function loadConfig(startDir?: string): Config {
       testCommand: (project["test_command"] as string) ?? "",
       standardTags: (projectTags["standard"] as string[]) ?? [],
     },
+    lint: mergeLintConfig(lint, lintConventions),
+  };
+}
+
+function asStringArray(value: unknown, fallback: string[]): string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v));
+  }
+  return fallback;
+}
+
+function asBool(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  return fallback;
+}
+
+function mergeLintConfig(
+  lint: Record<string, unknown>,
+  conventions: Record<string, unknown>
+): LintConfig {
+  const rawThreshold = lint["suggestion_threshold"];
+  let suggestionThreshold = DEFAULT_LINT.suggestionThreshold;
+  if (rawThreshold !== undefined) {
+    const n = typeof rawThreshold === "number" ? rawThreshold : Number(rawThreshold);
+    if (!Number.isFinite(n) || n < 0 || n > 1) {
+      throw new Error(
+        `Invalid [lint] suggestion_threshold: ${JSON.stringify(rawThreshold)}. ` +
+        `Must be a number between 0 and 1.`
+      );
+    }
+    suggestionThreshold = n;
+  }
+
+  return {
+    referenceDir: (lint["reference_dir"] as string) ?? DEFAULT_LINT.referenceDir,
+    referenceExclude: asStringArray(lint["reference_exclude"], DEFAULT_LINT.referenceExclude),
+    templateSourceDirs: asStringArray(lint["template_source_dirs"], DEFAULT_LINT.templateSourceDirs),
+    templateSourceFiles: asStringArray(lint["template_source_files"], DEFAULT_LINT.templateSourceFiles),
+    templatePatterns: asStringArray(lint["template_patterns"], DEFAULT_LINT.templatePatterns),
+    skipDirs: asStringArray(lint["skip_dirs"], DEFAULT_LINT.skipDirs),
+    evergreenConventions: {
+      requireFrontmatter: asBool(
+        conventions["require_frontmatter"],
+        DEFAULT_LINT.evergreenConventions.requireFrontmatter
+      ),
+      requireTitleField: asBool(
+        conventions["require_title_field"],
+        DEFAULT_LINT.evergreenConventions.requireTitleField
+      ),
+      requireTagsField: asBool(
+        conventions["require_tags_field"],
+        DEFAULT_LINT.evergreenConventions.requireTagsField
+      ),
+      requireRelatedSection: asBool(
+        conventions["require_related_section"],
+        DEFAULT_LINT.evergreenConventions.requireRelatedSection
+      ),
+      requireBodyWikilink: asBool(
+        conventions["require_body_wikilink"],
+        DEFAULT_LINT.evergreenConventions.requireBodyWikilink
+      ),
+    },
+    suggestionThreshold,
   };
 }
 
@@ -385,5 +503,19 @@ archive_dir = "archive"           # relative to backlog_dir
 
 # [project.tags]
 # standard = []
+
+# [lint]
+# reference_dir = "references"                                # flat reference notes
+# reference_exclude = ["tweets/"]                             # path fragments excluded from stale-reference check
+# template_source_dirs = [".claude/skills/", ".claude/rules/"] # docs that may contain placeholder wikilinks
+# template_source_files = ["CLAUDE.md"]
+# suggestion_threshold = 0.6                                  # min similarity for "did you mean?" hits
+
+# [lint.evergreen_conventions]
+# require_frontmatter = true
+# require_title_field = true
+# require_tags_field = true
+# require_related_section = true
+# require_body_wikilink = true
 `;
 }

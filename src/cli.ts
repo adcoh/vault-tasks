@@ -6,6 +6,7 @@ import { cmdDone } from "./commands/done.js";
 import { cmdEdit } from "./commands/edit.js";
 import { cmdInit } from "./commands/init.js";
 import { cmdInstallSkills } from "./commands/install-skills.js";
+import { cmdLint } from "./commands/lint.js";
 import { cmdList } from "./commands/list.js";
 import { cmdNew } from "./commands/new.js";
 import { cmdSearch } from "./commands/search.js";
@@ -29,6 +30,7 @@ Commands:
   edit <id>             Edit task fields (--status, --priority, --tags)
   archive               Move completed tasks to archive
   tags                  List all tags in use
+  lint                  Audit the vault for broken wikilinks, orphans, stale refs, drift
   init                  Initialize vault-tasks in current directory
   install-skills        Install Claude Code skills and rules
 
@@ -45,10 +47,26 @@ Options (vary by command):
   --days, -d            Stale threshold in days (default: 14)
   --list                List available skills
   --update              Overwrite existing skill files
+  --only                Run a single lint check (broken|orphans|stale|drift)
+  --scope               Restrict lint to files under <dir>
+  --json                Machine-readable lint output
+  --quiet               Print only the lint SUMMARY line
+  --no-suggestions      Skip "did you mean?" suggestions in lint
   --help, -h            Show this help message
 `;
 
-const BOOLEAN_FLAGS = new Set(["all", "commit", "install", "list", "update", "help", "no-dedupe"]);
+const BOOLEAN_FLAGS = new Set([
+  "all",
+  "commit",
+  "install",
+  "list",
+  "update",
+  "help",
+  "no-dedupe",
+  "json",
+  "quiet",
+  "no-suggestions",
+]);
 
 function isFlag(arg: string): boolean {
   if (arg.startsWith("--")) return true;
@@ -280,6 +298,16 @@ function main(): void {
 
       case "tags":
         cmdTags(config);
+        break;
+
+      case "lint":
+        cmdLint(config, {
+          only: args["only"] as string | undefined,
+          scope: args["scope"] as string | undefined,
+          json: args["json"] === true,
+          quiet: args["quiet"] === true,
+          noSuggestions: args["no-suggestions"] === true,
+        });
         break;
 
       default:
