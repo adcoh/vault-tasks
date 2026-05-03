@@ -13,7 +13,7 @@
  *   `~~~`-fenced blocks are also not recognised.
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { parseFrontmatter } from "../frontmatter.js";
 import { stripTargetSuffixes } from "./resolve.js";
@@ -39,8 +39,14 @@ function pathHitsSkipDir(relPosix: string, skipDirs: string[]): boolean {
 
 /**
  * Recursively walk the vault and yield .md files, respecting skipDirs.
- * Symlinks are not followed (statSync is used; the entry's target is
- * resolved, but loops are bounded by the vault root).
+ *
+ * Symlinks are deliberately NOT followed: a symlinked directory inside the
+ * vault could otherwise point at `/etc` or any other location outside the
+ * vault root, and a read-only audit has no business resolving them. We use
+ * `lstatSync` (not `statSync`) so symlinks report as symlinks rather than
+ * as their resolved target, and skip them. As an additional defence, we
+ * verify each candidate stays under the vault root via `relative()` — this
+ * catches any hardlinks or weird mount situations that lstat might miss.
  */
 export function walkMarkdown(
   vaultRoot: string,
@@ -59,17 +65,30 @@ export function walkMarkdown(
     }
 
     for (const name of entries) {
-      // Always skip dotfiles at top level except known content dirs would
-      // have been removed by skipDirs anyway. Walk dotted dirs only if the
-      // user explicitly opts in by removing them from skipDirs.
       const abs = join(dir, name);
+
+      // Containment check: relative path must not start with `..`. This
+      // is a belt-and-suspenders check — `join()` collapses `..` segments,
+      // so this can only fire for genuinely escaping paths.
+      const rel = toRelPosix(abs, vaultRoot);
+      if (rel.startsWith("../") || rel === "..") {
+        onWarn(`skipping path outside vault root: ${abs}`);
+        continue;
+      }
+
       let st;
       try {
-        st = statSync(abs);
+        st = lstatSync(abs);
       } catch {
         continue;
       }
-      const rel = toRelPosix(abs, vaultRoot);
+
+      // Skip symlinks (regardless of target). Following them risks reading
+      // outside the vault root and creating cycles.
+      if (st.isSymbolicLink()) {
+        continue;
+      }
+
       if (pathHitsSkipDir(rel, skipDirs)) continue;
       if (st.isDirectory()) {
         recurse(abs);

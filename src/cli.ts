@@ -300,15 +300,32 @@ function main(): void {
         cmdTags(config);
         break;
 
-      case "lint":
+      case "lint": {
+        // --only and --scope are value-bearing flags. parseArgs sets them to
+        // `true` if the user passes the flag without a value (e.g. `--only`
+        // followed by another flag or end-of-args), so coerce explicitly
+        // rather than asserting the type away.
+        const onlyArg = args["only"];
+        const scopeArg = args["scope"];
+        if (onlyArg === true) {
+          console.error("Error: --only requires a value (broken|orphans|stale|drift)");
+          process.exitCode = 2;
+          return;
+        }
+        if (scopeArg === true) {
+          console.error("Error: --scope requires a value (a directory)");
+          process.exitCode = 2;
+          return;
+        }
         cmdLint(config, {
-          only: args["only"] as string | undefined,
-          scope: args["scope"] as string | undefined,
+          only: typeof onlyArg === "string" ? onlyArg : undefined,
+          scope: typeof scopeArg === "string" ? scopeArg : undefined,
           json: args["json"] === true,
           quiet: args["quiet"] === true,
           noSuggestions: args["no-suggestions"] === true,
         });
         break;
+      }
 
       default:
         console.error(`Unknown command: ${command}\n`);

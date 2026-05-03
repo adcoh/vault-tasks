@@ -12,7 +12,7 @@
  * that subtree to look broken just because their target is outside it.
  */
 
-import { relative, resolve, sep } from "node:path";
+import { relative, sep } from "node:path";
 import type { Config } from "../config.js";
 import { findBrokenLinks } from "./checks/broken.js";
 import { findEvergreenDrift } from "./checks/drift.js";
@@ -57,20 +57,24 @@ function inScope(relPath: string, scope: string | null): boolean {
  */
 export function lintVault(config: Config, opts: LintOptions = {}): LintReport {
   const warnings: string[] = [];
-  const onWarn = opts.onWarn ?? ((msg) => warnings.push(msg));
+  // Always accumulate into the report; forward to opts.onWarn if provided.
+  // The report's `warnings` field is what `--json` and `formatHumanReport`
+  // surface, so dropping warnings when a callback is set silently degrades
+  // the JSON output.
+  const onWarn = (msg: string): void => {
+    warnings.push(msg);
+    opts.onWarn?.(msg);
+  };
 
   const lint = config.lint;
   const evergreenDirRel = toRelPosix(config.evergreenDir, config.vaultRoot);
-  const referenceDirRel = toRelPosix(
-    resolve(config.vaultRoot, lint.referenceDir),
-    config.vaultRoot
-  );
+  const referenceDirRel = toRelPosix(lint.referenceDir, config.vaultRoot);
 
   const allFiles = readVaultFiles(config.vaultRoot, lint.skipDirs, onWarn);
   const index = buildIndex(allFiles);
 
   for (const [key, paths] of index.collisions) {
-    warnings.push(
+    onWarn(
       `${paths.length} files share normalised key '${key}': ${paths.join(", ")}`
     );
   }

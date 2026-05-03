@@ -9,7 +9,12 @@ import { buildIndex, normKey, resolveTarget, stripTargetSuffixes } from "../lint
 import { collectWikilinks, isTemplatePlaceholder, readVaultFiles } from "../lint/collect.js";
 import { findBrokenLinks } from "../lint/checks/broken.js";
 import { attachSuggestions, computeLeverageFixes } from "../lint/suggest.js";
-import type { BrokenEntry } from "../lint/types.js";
+import {
+  formatHumanReport,
+  formatJsonReport,
+  formatSummaryLine,
+} from "../lint/report.js";
+import type { BrokenEntry, LintReport } from "../lint/types.js";
 
 function makeConfig(dir: string, overrides: Partial<Config["lint"]> = {}): Config {
   return {
@@ -32,7 +37,7 @@ function makeConfig(dir: string, overrides: Partial<Config["lint"]> = {}): Confi
     dedupeScanLimit: 500,
     project: { name: "", qualityCommand: "", testCommand: "", standardTags: [] },
     lint: {
-      referenceDir: "40-references",
+      referenceDir: join(dir, "40-references"),
       referenceExclude: ["tweets/"],
       templateSourceDirs: [".claude/skills/", ".claude/rules/"],
       templateSourceFiles: ["CLAUDE.md"],
@@ -376,10 +381,22 @@ describe("lintVault", () => {
     const cfg = makeConfig(dir);
     const report = lintVault(cfg);
 
-    assert.ok(report.summary.broken >= 1, "expected at least one broken link");
-    assert.ok(report.summary.orphans >= 1, "expected at least one orphan");
-    assert.ok(report.summary.stale >= 1, "expected at least one stale reference");
-    assert.ok(report.summary.drift >= 1, "expected at least one drift");
+    // Exact counts — the fixture is deterministic.
+    assert.deepEqual(report.summary, {
+      broken: 1,
+      orphans: 1,
+      stale: 1,
+      drift: 1,
+    });
+    assert.equal(report.broken[0].target, "ghost");
+    assert.equal(report.broken[0].count, 1);
+    assert.deepEqual(report.orphans, ["30-evergreen/messy.md"]);
+    assert.deepEqual(report.stale, ["40-references/abandoned.md"]);
+    assert.equal(report.drift[0].filePath, "30-evergreen/messy.md");
+    assert.deepEqual(
+      report.drift[0].issues,
+      ["no frontmatter", "no wikilinks in body", "no ## Related section"]
+    );
     assert.equal(report.hasIssues, true);
   });
 
@@ -388,11 +405,13 @@ describe("lintVault", () => {
     write(dir, "j.md", "[[ghost]]");
     const cfg = makeConfig(dir);
     const onlyBroken = lintVault(cfg, { only: "broken" });
-    assert.ok(onlyBroken.summary.broken >= 1);
+    assert.equal(onlyBroken.summary.broken, 1);
+    assert.equal(onlyBroken.broken[0].target, "ghost");
     assert.equal(onlyBroken.summary.drift, 0);
     const onlyDrift = lintVault(cfg, { only: "drift" });
     assert.equal(onlyDrift.summary.broken, 0);
-    assert.ok(onlyDrift.summary.drift >= 1);
+    assert.equal(onlyDrift.summary.drift, 1);
+    assert.equal(onlyDrift.drift[0].filePath, "30-evergreen/messy.md");
   });
 
   it("respects per-file lint_orphan_ok opt-out", () => {
@@ -434,5 +453,242 @@ describe("lintVault", () => {
     const report = lintVault(cfg, { only: "broken" });
     assert.equal(report.summary.broken, 1);
     assert.equal(report.broken[0].target, "ghost");
+  });
+
+  it("forwards warnings to onWarn AND retains them in the report", () => {
+    write(dir, "Foo Bar.md", "---\ntitle: Foo Bar\n---\nBody");
+    write(dir, "foo-bar.md", "Body");
+    const seen: string[] = [];
+    const cfg = makeConfig(dir);
+    const report = lintVault(cfg, { onWarn: (m) => seen.push(m) });
+    assert.ok(seen.length > 0, "onWarn callback should fire");
+    assert.deepEqual(report.warnings, seen);
+  });
+});
+
+describe("report formatters", () => {
+  function makeReport(overrides: Partial<LintReport> = {}): LintReport {
+    return {
+      broken: [],
+      orphans: [],
+      stale: [],
+      drift: [],
+      leverageFixes: [],
+      warnings: [],
+      summary: { broken: 0, orphans: 0, stale: 0, drift: 0 },
+      hasIssues: false,
+      ...overrides,
+    };
+  }
+
+  it("formatSummaryLine produces the exact log-appendable string", () => {
+    const r = makeReport({ summary: { broken: 3, orphans: 1, stale: 0, drift: 2 } });
+    assert.equal(formatSummaryLine(r), "SUMMARY: broken:3 orphans:1 stale:0 drift:2");
+  });
+
+  it("formatSummaryLine on a clean report", () => {
+    assert.equal(formatSummaryLine(makeReport()), "SUMMARY: broken:0 orphans:0 stale:0 drift:0");
+  });
+
+  it("formatJsonReport round-trips through JSON.parse", () => {
+    const r = makeReport({
+      broken: [
+        {
+          target: "ghost",
+          count: 2,
+          locations: [
+            { source: "a.md", line: 1 },
+            { source: "b.md", line: 5 },
+          ],
+          suggestions: [
+            {
+              filePath: "ghost-real.md",
+              candidate: "ghost-real",
+              kind: "basename",
+              similarity: 0.85,
+              proposedAlias: "ghost",
+            },
+          ],
+        },
+      ],
+      orphans: ["evergreen/lonely.md"],
+      summary: { broken: 1, orphans: 1, stale: 0, drift: 0 },
+      hasIssues: true,
+    });
+    const json = formatJsonReport(r);
+    const parsed = JSON.parse(json);
+    assert.equal(parsed.summary.broken, 1);
+    assert.equal(parsed.summary.orphans, 1);
+    assert.equal(parsed.broken[0].target, "ghost");
+    assert.equal(parsed.broken[0].count, 2);
+    assert.equal(parsed.broken[0].suggestions[0].filePath, "ghost-real.md");
+    assert.deepEqual(parsed.orphans, ["evergreen/lonely.md"]);
+    assert.equal(parsed.hasIssues, true);
+  });
+
+  it("formatHumanReport renders all sections with counts", () => {
+    const r = makeReport({
+      broken: [
+        {
+          target: "ghost",
+          count: 3,
+          locations: [
+            { source: "a.md", line: 1 },
+            { source: "b.md", line: 2 },
+            { source: "c.md", line: 3 },
+          ],
+          suggestions: [
+            {
+              filePath: "ghost-real.md",
+              candidate: "ghost-real",
+              kind: "basename",
+              similarity: 0.85,
+              proposedAlias: "ghost",
+            },
+          ],
+        },
+      ],
+      orphans: ["30-evergreen/lonely.md"],
+      stale: ["40-references/abandoned.md"],
+      drift: [{ filePath: "30-evergreen/messy.md", issues: ["no frontmatter"] }],
+      leverageFixes: [
+        {
+          action: "add alias to ghost-real.md",
+          closes: 3,
+          filePath: "ghost-real.md",
+          aliases: ["ghost"],
+        },
+      ],
+      warnings: ["2 files share normalised key 'foo': a.md, b.md"],
+      summary: { broken: 1, orphans: 1, stale: 1, drift: 1 },
+      hasIssues: true,
+    });
+    const out = formatHumanReport(r);
+
+    assert.ok(out.includes("=== WARNINGS (1) ==="));
+    assert.ok(out.includes("share normalised key"));
+    assert.ok(out.includes("=== HIGH-LEVERAGE FIXES (1) ==="));
+    assert.ok(out.includes("add alias to ghost-real.md"));
+    assert.ok(out.includes("closes 3 broken links"));
+    assert.ok(out.includes("=== BROKEN WIKILINKS (1) ==="));
+    assert.ok(out.includes("[[ghost]]  (3 occurrences)"));
+    assert.ok(out.includes("suggest: ghost-real.md"));
+    assert.ok(out.includes("a.md:1"));
+    assert.ok(out.includes("=== ORPHAN EVERGREENS (1) ==="));
+    assert.ok(out.includes("30-evergreen/lonely.md"));
+    assert.ok(out.includes("=== STALE REFERENCES (1) ==="));
+    assert.ok(out.includes("40-references/abandoned.md"));
+    assert.ok(out.includes("=== CONVENTION DRIFT (1) ==="));
+    assert.ok(out.includes("30-evergreen/messy.md: no frontmatter"));
+    assert.ok(out.endsWith("SUMMARY: broken:1 orphans:1 stale:1 drift:1"));
+  });
+
+  it("formatHumanReport truncates locations beyond MAX with '+N more'", () => {
+    const locations = Array.from({ length: 7 }, (_, i) => ({
+      source: `f${i}.md`,
+      line: i + 1,
+    }));
+    const r = makeReport({
+      broken: [{ target: "ghost", count: 7, locations, suggestions: [] }],
+      summary: { broken: 1, orphans: 0, stale: 0, drift: 0 },
+      hasIssues: true,
+    });
+    const out = formatHumanReport(r);
+    // First 3 visible, then "+4 more"
+    assert.ok(out.includes("f0.md:1"));
+    assert.ok(out.includes("f1.md:2"));
+    assert.ok(out.includes("f2.md:3"));
+    assert.ok(out.includes("... +4 more"));
+    assert.ok(!out.includes("f6.md"));
+  });
+
+  it("formatHumanReport handles fully-clean report", () => {
+    const out = formatHumanReport(makeReport());
+    assert.ok(out.includes("=== BROKEN WIKILINKS (0) ==="));
+    assert.ok(out.includes("=== ORPHAN EVERGREENS (0) ==="));
+    assert.ok(out.includes("=== STALE REFERENCES (0) ==="));
+    assert.ok(out.includes("=== CONVENTION DRIFT (0) ==="));
+    assert.ok(!out.includes("WARNINGS"));
+    assert.ok(!out.includes("HIGH-LEVERAGE FIXES"));
+  });
+});
+
+describe("config validation for [lint]", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-lint-cfg-"));
+  });
+
+  it("rejects an invalid template_patterns regex with file context", async () => {
+    const { loadConfig } = await import("../config.js");
+    write(
+      dir,
+      ".vault-tasks.toml",
+      `[lint]\ntemplate_patterns = ["valid", "[unclosed"]\n`
+    );
+    assert.throws(
+      () => loadConfig(dir),
+      /template_patterns\[1\]:.*"\[unclosed"/
+    );
+  });
+
+  it("rejects suggestion_threshold outside 0..1", async () => {
+    const { loadConfig } = await import("../config.js");
+    write(dir, ".vault-tasks.toml", `[lint]\nsuggestion_threshold = 2\n`);
+    assert.throws(() => loadConfig(dir), /suggestion_threshold/);
+  });
+
+  it("loadConfig returns absolute referenceDir", async () => {
+    const { loadConfig } = await import("../config.js");
+    write(dir, ".vault-tasks.toml", `[lint]\nreference_dir = "my-refs"\n`);
+    const cfg = loadConfig(dir);
+    assert.ok(
+      cfg.lint.referenceDir.startsWith(dir),
+      `expected absolute path under ${dir}, got ${cfg.lint.referenceDir}`
+    );
+  });
+
+  it("loadConfig returns absolute referenceDir even with no config file", async () => {
+    const { loadConfig } = await import("../config.js");
+    const cfg = loadConfig(dir);
+    assert.ok(
+      cfg.lint.referenceDir.startsWith(dir),
+      `expected absolute path under ${dir}, got ${cfg.lint.referenceDir}`
+    );
+  });
+});
+
+describe("walkMarkdown (security)", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-lint-walk-"));
+  });
+
+  it("does not follow directory symlinks (read only what's inside the vault)", async () => {
+    const { symlinkSync, mkdirSync } = await import("node:fs");
+    // External directory containing a markdown file the lint must NOT see.
+    const outside = mkdtempSync(join(tmpdir(), "vt-outside-"));
+    write(outside, "secret.md", "[[exfiltrate]]");
+    // Symlink inside the vault pointing at the external dir.
+    mkdirSync(dir, { recursive: true });
+    try {
+      symlinkSync(outside, join(dir, "linked"));
+    } catch (err) {
+      // Some CI environments disable symlink creation. Skip rather than fail.
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EPERM" || code === "EACCES") return;
+      throw err;
+    }
+    write(dir, "real.md", "real body");
+    const cfg = makeConfig(dir);
+    const report = lintVault(cfg);
+    // No broken-link findings should be sourced from `linked/secret.md`.
+    const sources = report.broken.flatMap((b) => b.locations.map((l) => l.source));
+    for (const s of sources) {
+      assert.ok(
+        !s.includes("linked/"),
+        `walker should not have descended into the symlinked dir; saw: ${s}`
+      );
+    }
   });
 });

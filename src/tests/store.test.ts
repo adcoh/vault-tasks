@@ -27,7 +27,7 @@ function makeConfig(dir: string): Config {
     dedupeScanLimit: 500,
     project: { name: "", qualityCommand: "", testCommand: "", standardTags: [] },
     lint: {
-      referenceDir: "references",
+      referenceDir: join(dir, "references"),
       referenceExclude: [],
       templateSourceDirs: [],
       templateSourceFiles: [],

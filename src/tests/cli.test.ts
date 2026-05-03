@@ -321,6 +321,58 @@ describe("CLI error handling", () => {
     assert.equal(meta["status"], "in-progress");
     assert.equal(meta["priority"], "high");
   });
+
+  it("lint exits 0 on a clean vault and 1 with broken links", () => {
+    const clean = run(["lint"], dir);
+    assert.equal(clean.exitCode, 0);
+    assert.ok(clean.stdout.includes("SUMMARY: broken:0"));
+
+    writeFileSync(join(dir, "doc.md"), "[[ghost]]\n", "utf-8");
+    const dirty = run(["lint"], dir);
+    assert.equal(dirty.exitCode, 1);
+    assert.ok(dirty.stdout.includes("SUMMARY: broken:1"));
+  });
+
+  it("lint --quiet prints only the summary line", () => {
+    writeFileSync(join(dir, "doc.md"), "[[ghost]]\n", "utf-8");
+    const result = run(["lint", "--quiet"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.trim(), "SUMMARY: broken:1 orphans:0 stale:0 drift:0");
+  });
+
+  it("lint --json emits valid JSON with full report", () => {
+    writeFileSync(join(dir, "doc.md"), "[[ghost]]\n", "utf-8");
+    const result = run(["lint", "--json"], dir);
+    assert.equal(result.exitCode, 1);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.summary.broken, 1);
+    assert.equal(parsed.broken[0].target, "ghost");
+    assert.equal(parsed.hasIssues, true);
+  });
+
+  it("lint --only without value exits 2 with usage error", () => {
+    const result = run(["lint", "--only"], dir);
+    assert.equal(result.exitCode, 2);
+    assert.ok(result.stderr.includes("--only requires a value"));
+  });
+
+  it("lint --only with invalid value exits 2", () => {
+    const result = run(["lint", "--only", "bogus"], dir);
+    assert.equal(result.exitCode, 2);
+    assert.ok(result.stderr.includes("--only must be one of"));
+  });
+
+  it("lint --scope without value exits 2", () => {
+    const result = run(["lint", "--scope"], dir);
+    assert.equal(result.exitCode, 2);
+    assert.ok(result.stderr.includes("--scope requires a value"));
+  });
+
+  it("lint --scope with .. is rejected", () => {
+    const result = run(["lint", "--scope", "../escape"], dir);
+    assert.equal(result.exitCode, 2);
+    assert.ok(result.stderr.includes("must be inside the vault"));
+  });
 });
 
 describe("CLI with ULID strategy", () => {

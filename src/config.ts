@@ -277,7 +277,10 @@ export function loadConfig(startDir?: string): Config {
       evergreenDir: resolve(vaultRoot, DEFAULTS.evergreenDir),
       idStrategy: legacyWidth !== null ? "sequential" : DEFAULTS.idStrategy,
       padWidth: legacyWidth !== null ? Math.max(legacyWidth, DEFAULTS.padWidth) : DEFAULTS.padWidth,
-      lint: { ...DEFAULT_LINT },
+      lint: {
+        ...DEFAULT_LINT,
+        referenceDir: resolve(vaultRoot, DEFAULT_LINT.referenceDir),
+      },
     };
   }
 
@@ -397,7 +400,7 @@ export function loadConfig(startDir?: string): Config {
       testCommand: (project["test_command"] as string) ?? "",
       standardTags: (projectTags["standard"] as string[]) ?? [],
     },
-    lint: mergeLintConfig(lint, lintConventions),
+    lint: mergeLintConfig(vaultRoot, lint, lintConventions),
   };
 }
 
@@ -414,6 +417,7 @@ function asBool(value: unknown, fallback: boolean): boolean {
 }
 
 function mergeLintConfig(
+  vaultRoot: string,
   lint: Record<string, unknown>,
   conventions: Record<string, unknown>
 ): LintConfig {
@@ -430,12 +434,39 @@ function mergeLintConfig(
     suggestionThreshold = n;
   }
 
+  // referenceDir is the only filesystem path in the lint config — resolve it
+  // to absolute so callers can use it directly without re-resolving against
+  // CWD. The other arrays (templateSourceDirs, templateSourceFiles, skipDirs,
+  // referenceExclude) are not paths: they are vault-relative patterns matched
+  // against vault-relative posix strings during link collection and walking.
+  // Making them absolute would break the matching, so they stay as configured.
+  const referenceDirRaw = (lint["reference_dir"] as string) ?? DEFAULT_LINT.referenceDir;
+  const referenceDir = resolve(vaultRoot, referenceDirRaw);
+  if (relative(vaultRoot, referenceDir).startsWith("..")) {
+    throw new Error(`reference_dir must be inside the vault root`);
+  }
+
+  const templatePatterns = asStringArray(lint["template_patterns"], DEFAULT_LINT.templatePatterns);
+  // Validate patterns at config-load time so a typo surfaces with a clear
+  // message and a file:line pointer to the config, not a stack trace from
+  // inside the link collector.
+  templatePatterns.forEach((p, i) => {
+    try {
+      new RegExp(p);
+    } catch (err) {
+      throw new Error(
+        `Invalid [lint] template_patterns[${i}]: ${JSON.stringify(p)}. ` +
+        `${(err as Error).message}`
+      );
+    }
+  });
+
   return {
-    referenceDir: (lint["reference_dir"] as string) ?? DEFAULT_LINT.referenceDir,
+    referenceDir,
     referenceExclude: asStringArray(lint["reference_exclude"], DEFAULT_LINT.referenceExclude),
     templateSourceDirs: asStringArray(lint["template_source_dirs"], DEFAULT_LINT.templateSourceDirs),
     templateSourceFiles: asStringArray(lint["template_source_files"], DEFAULT_LINT.templateSourceFiles),
-    templatePatterns: asStringArray(lint["template_patterns"], DEFAULT_LINT.templatePatterns),
+    templatePatterns,
     skipDirs: asStringArray(lint["skip_dirs"], DEFAULT_LINT.skipDirs),
     evergreenConventions: {
       requireFrontmatter: asBool(
