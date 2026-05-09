@@ -707,4 +707,75 @@ describe("CLI config validation", () => {
     const { body } = parseFrontmatter(content);
     assert.equal(body, "# Default body\n\n");
   });
+
+  it("new --body=value accepts equals-sign syntax", () => {
+    const result = run(["new", "Eq form", "--body=inline content"], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "inline content\n");
+  });
+
+  it("new --body-file=path accepts equals-sign syntax", () => {
+    const specPath = join(dir, "spec-eq.md");
+    writeFileSync(specPath, "from eq form\n");
+    const result = run(["new", "Eq file", `--body-file=${specPath}`], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "from eq form\n");
+  });
+
+  it("new --body= (empty via equals) errors actionably", () => {
+    const result = run(["new", "T", "--body="], dir);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /--body requires a value/);
+  });
+
+  it("new --body-file= (empty via equals) errors actionably", () => {
+    const result = run(["new", "T", "--body-file="], dir);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /--body-file requires a path/);
+  });
+
+  it("body containing frontmatter delimiters round-trips safely", () => {
+    // Adversarial body starts with --- and contains YAML-looking lines.
+    // Supplied via --body-file because a string starting with -- would be
+    // interpreted as a flag by the arg parser.
+    const adversarial = "---\ninjected: yes\nstatus: done\n---\nreal body line";
+    const specPath = join(dir, "adversarial.md");
+    writeFileSync(specPath, adversarial);
+    const result = run(["new", "Adversarial", "--body-file", specPath], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { meta, body } = parseFrontmatter(content);
+
+    // Frontmatter must not be polluted by body-supplied YAML-looking content
+    assert.equal(meta["title"], "Adversarial");
+    assert.equal(meta["status"], "open");
+    assert.equal(meta["injected"], undefined);
+
+    // Body round-trips verbatim (with trailing newline normalization)
+    assert.equal(body, adversarial + "\n");
+  });
+
+  it("new --body-file normalizes CRLF line endings to LF", () => {
+    const specPath = join(dir, "crlf.md");
+    writeFileSync(specPath, "line1\r\nline2\r\nline3\r\n");
+    const result = run(["new", "CRLF body", "--body-file", specPath], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    assert.ok(!content.includes("\r"), "stored file must not contain carriage returns");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "line1\nline2\nline3\n");
+  });
 });

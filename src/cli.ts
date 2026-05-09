@@ -213,18 +213,20 @@ function main(): void {
         const bodyArg = args["body"];
         const bodyFileArg = args["body-file"];
 
-        if (bodyArg !== undefined && bodyFileArg !== undefined) {
-          console.error("Error: --body and --body-file are mutually exclusive. Pass one or the other.");
-          process.exitCode = 2;
-          return;
-        }
-        if (bodyArg === true) {
+        // Reject missing values before mutex so the diagnostic points at the
+        // real mistake when the user typed `--body= --body-file=`.
+        if (bodyArg === true || bodyArg === "") {
           console.error("Error: --body requires a value (a string, or '-' to read from stdin).");
           process.exitCode = 2;
           return;
         }
-        if (bodyFileArg === true) {
+        if (bodyFileArg === true || bodyFileArg === "") {
           console.error("Error: --body-file requires a path.");
+          process.exitCode = 2;
+          return;
+        }
+        if (bodyArg !== undefined && bodyFileArg !== undefined) {
+          console.error("Error: --body and --body-file are mutually exclusive. Pass one or the other.");
           process.exitCode = 2;
           return;
         }
@@ -252,10 +254,10 @@ function main(): void {
           }
         }
 
-        // Normalize trailing newline so file output ends with exactly one \n,
-        // regardless of input source. Preserves default body shape.
+        // Normalize CRLF→LF (Windows interop) and trailing newline so file
+        // output is consistent across input sources (inline / stdin / file).
         if (body !== undefined) {
-          body = body.replace(/\n*$/, "\n");
+          body = body.replace(/\r\n/g, "\n").replace(/\n*$/, "\n");
         }
 
         cmdNew(config, {
