@@ -743,9 +743,7 @@ describe("CLI config validation", () => {
   });
 
   it("body containing frontmatter delimiters round-trips safely", () => {
-    // Adversarial body starts with --- and contains YAML-looking lines.
-    // Supplied via --body-file because a string starting with -- would be
-    // interpreted as a flag by the arg parser.
+    // Use --body-file: an inline value starting with -- would be parsed as a flag.
     const adversarial = "---\ninjected: yes\nstatus: done\n---\nreal body line";
     const specPath = join(dir, "adversarial.md");
     writeFileSync(specPath, adversarial);
@@ -757,12 +755,9 @@ describe("CLI config validation", () => {
     const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
     const { meta, body } = parseFrontmatter(content);
 
-    // Frontmatter must not be polluted by body-supplied YAML-looking content
     assert.equal(meta["title"], "Adversarial");
     assert.equal(meta["status"], "open");
     assert.equal(meta["injected"], undefined);
-
-    // Body round-trips verbatim (with trailing newline normalization)
     assert.equal(body, adversarial + "\n");
   });
 
