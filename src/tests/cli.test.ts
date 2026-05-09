@@ -33,6 +33,26 @@ function run(args: string[], cwd: string): RunResult {
   }
 }
 
+function runWithStdin(args: string[], cwd: string, input: string): RunResult {
+  try {
+    const stdout = execFileSync("node", [CLI, ...args], {
+      cwd,
+      encoding: "utf-8",
+      timeout: 10000,
+      stdio: ["pipe", "pipe", "pipe"],
+      input,
+    });
+    return { stdout, stderr: "", exitCode: 0 };
+  } catch (err) {
+    const e = err as { stdout?: string; stderr?: string; status?: number };
+    return {
+      stdout: e.stdout ?? "",
+      stderr: e.stderr ?? "",
+      exitCode: e.status ?? 1,
+    };
+  }
+}
+
 /** Write a config file that forces sequential ID strategy for backwards-compat tests */
 function writeSequentialConfig(dir: string): void {
   writeFileSync(
@@ -607,5 +627,84 @@ describe("CLI config validation", () => {
     const result = run(["list"], dir);
     assert.notEqual(result.exitCode, 0);
     assert.match(result.stderr, /dedupe_threshold/);
+  });
+
+  it("new --body writes given body inline", () => {
+    const result = run(["new", "Inline body task", "--body", "Custom body text"], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "Custom body text\n");
+  });
+
+  it("new --body-file reads body from file", () => {
+    const specPath = join(dir, "spec.md");
+    writeFileSync(specPath, "# Spec\n\nDetails here.\n");
+    const result = run(["new", "From file", "--body-file", specPath], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "# Spec\n\nDetails here.\n");
+  });
+
+  it("new --body - reads body from stdin", () => {
+    const result = runWithStdin(
+      ["new", "Stdin task", "--body", "-"],
+      dir,
+      "Piped body content"
+    );
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "Piped body content\n");
+  });
+
+  it("new --body and --body-file are mutually exclusive", () => {
+    const result = run(
+      ["new", "T", "--body", "x", "--body-file", "y"],
+      dir
+    );
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /mutually exclusive/);
+  });
+
+  it("new --body with no value errors", () => {
+    const result = run(["new", "T", "--body"], dir);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /--body requires a value/);
+  });
+
+  it("new --body-file with no value errors", () => {
+    const result = run(["new", "T", "--body-file"], dir);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /--body-file requires a path/);
+  });
+
+  it("new --body-file with missing path errors actionably", () => {
+    const missing = join(dir, "does-not-exist.md");
+    const result = run(["new", "T", "--body-file", missing], dir);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /failed to read --body-file/);
+    assert.ok(result.stderr.includes(missing), "stderr should include the failing path");
+  });
+
+  it("new without body flag preserves default body", () => {
+    const result = run(["new", "Default body"], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "# Default body\n\n");
   });
 });

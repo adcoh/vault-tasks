@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
 import { loadConfig } from "./config.js";
 import { cmdArchive } from "./commands/archive.js";
 import { cmdDone } from "./commands/done.js";
@@ -38,6 +39,8 @@ Options (vary by command):
   --priority, -p        high, medium, or low
   --tags, -t            Comma-separated tags
   --source, -s          Where this was noticed
+  --body                Task body as inline string (use - for stdin)
+  --body-file           Task body read from file path
   --commit              Git commit after creating
   --no-dedupe           Skip duplicate detection (new)
   --status              Filter or set status
@@ -200,21 +203,72 @@ function main(): void {
 
   try {
     switch (command) {
-      case "new":
+      case "new": {
         if (!positional[0]) {
-          console.error("Usage: vt new <title> [--priority P] [--tags t1,t2] [--source S] [--commit]");
+          console.error("Usage: vt new <title> [--priority P] [--tags t1,t2] [--source S] [--commit] [--body TEXT|--body-file PATH]");
           process.exitCode = 1;
           return;
         }
+
+        const bodyArg = args["body"];
+        const bodyFileArg = args["body-file"];
+
+        if (bodyArg !== undefined && bodyFileArg !== undefined) {
+          console.error("Error: --body and --body-file are mutually exclusive. Pass one or the other.");
+          process.exitCode = 2;
+          return;
+        }
+        if (bodyArg === true) {
+          console.error("Error: --body requires a value (a string, or '-' to read from stdin).");
+          process.exitCode = 2;
+          return;
+        }
+        if (bodyFileArg === true) {
+          console.error("Error: --body-file requires a path.");
+          process.exitCode = 2;
+          return;
+        }
+
+        let body: string | undefined;
+        if (typeof bodyArg === "string") {
+          if (bodyArg === "-") {
+            try {
+              body = readFileSync(0, "utf-8");
+            } catch (err) {
+              console.error(`Error: failed to read body from stdin: ${(err as Error).message}. Pipe content into the command, e.g. cat spec.md | vt new "..." --body -`);
+              process.exitCode = 1;
+              return;
+            }
+          } else {
+            body = bodyArg;
+          }
+        } else if (typeof bodyFileArg === "string") {
+          try {
+            body = readFileSync(bodyFileArg, "utf-8");
+          } catch (err) {
+            console.error(`Error: failed to read --body-file '${bodyFileArg}': ${(err as Error).message}`);
+            process.exitCode = 1;
+            return;
+          }
+        }
+
+        // Normalize trailing newline so file output ends with exactly one \n,
+        // regardless of input source. Preserves default body shape.
+        if (body !== undefined) {
+          body = body.replace(/\n*$/, "\n");
+        }
+
         cmdNew(config, {
           title: positional[0],
           priority: (args["priority"] as string | undefined)?.toLowerCase(),
           tags: args["tags"] as string | undefined,
           source: args["source"] as string | undefined,
+          body,
           commit: args["commit"] === true,
           noDedupe: args["no-dedupe"] === true,
         });
         break;
+      }
 
       case "list":
         cmdList(config, {

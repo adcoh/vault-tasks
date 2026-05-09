@@ -10,6 +10,7 @@ export function cmdNew(
     priority?: string;
     tags?: string;
     source?: string;
+    body?: string;
     commit?: boolean;
     noDedupe?: boolean;
   }
@@ -49,6 +50,7 @@ export function cmdNew(
     priority: args.priority,
     tags,
     source: args.source,
+    body: args.body,
   });
 
   console.log(`Created: ${store.relativePath(task.filePath)}`);
