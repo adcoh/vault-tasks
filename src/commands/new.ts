@@ -1,7 +1,57 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import type { Config } from "../config.js";
 import { similarity } from "../similarity.js";
 import { TaskStore } from "../store.js";
+
+function resolveBody(
+  bodyArg: string | undefined,
+  bodyFileArg: string | undefined
+): { body?: string; error?: { message: string; exitCode: number } } {
+  if (bodyArg !== undefined && bodyFileArg !== undefined) {
+    return {
+      error: {
+        message: "Error: --body and --body-file are mutually exclusive. Pass one or the other.",
+        exitCode: 2,
+      },
+    };
+  }
+
+  let body: string | undefined;
+  if (bodyArg !== undefined) {
+    if (bodyArg === "-") {
+      try {
+        body = readFileSync(0, "utf-8");
+      } catch (err) {
+        return {
+          error: {
+            message: `Error: failed to read body from stdin: ${(err as Error).message}. Pipe content into the command, e.g. cat spec.md | vt new "..." --body -`,
+            exitCode: 1,
+          },
+        };
+      }
+    } else {
+      body = bodyArg;
+    }
+  } else if (bodyFileArg !== undefined) {
+    try {
+      body = readFileSync(bodyFileArg, "utf-8");
+    } catch (err) {
+      return {
+        error: {
+          message: `Error: failed to read --body-file '${bodyFileArg}': ${(err as Error).message}. Verify the path exists and is readable, or pipe content via --body - instead.`,
+          exitCode: 1,
+        },
+      };
+    }
+  }
+
+  // Normalize CRLF (Windows) and collapse trailing newlines to one.
+  if (body !== undefined) {
+    body = body.replace(/\r\n/g, "\n").replace(/\n*$/, "\n");
+  }
+  return { body };
+}
 
 export function cmdNew(
   config: Config,
@@ -10,10 +60,19 @@ export function cmdNew(
     priority?: string;
     tags?: string;
     source?: string;
+    body?: string;
+    bodyFile?: string;
     commit?: boolean;
     noDedupe?: boolean;
   }
 ): void {
+  const resolved = resolveBody(args.body, args.bodyFile);
+  if (resolved.error) {
+    console.error(resolved.error.message);
+    process.exitCode = resolved.error.exitCode;
+    return;
+  }
+
   const store = new TaskStore(config);
   const tags = args.tags
     ? args.tags.split(",").map((t) => t.trim())
@@ -49,6 +108,7 @@ export function cmdNew(
     priority: args.priority,
     tags,
     source: args.source,
+    body: resolved.body,
   });
 
   console.log(`Created: ${store.relativePath(task.filePath)}`);

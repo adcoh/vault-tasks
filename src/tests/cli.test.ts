@@ -33,6 +33,26 @@ function run(args: string[], cwd: string): RunResult {
   }
 }
 
+function runWithStdin(args: string[], cwd: string, input: string): RunResult {
+  try {
+    const stdout = execFileSync("node", [CLI, ...args], {
+      cwd,
+      encoding: "utf-8",
+      timeout: 10000,
+      stdio: ["pipe", "pipe", "pipe"],
+      input,
+    });
+    return { stdout, stderr: "", exitCode: 0 };
+  } catch (err) {
+    const e = err as { stdout?: string; stderr?: string; status?: number };
+    return {
+      stdout: e.stdout ?? "",
+      stderr: e.stderr ?? "",
+      exitCode: e.status ?? 1,
+    };
+  }
+}
+
 /** Write a config file that forces sequential ID strategy for backwards-compat tests */
 function writeSequentialConfig(dir: string): void {
   writeFileSync(
@@ -607,5 +627,165 @@ describe("CLI config validation", () => {
     const result = run(["list"], dir);
     assert.notEqual(result.exitCode, 0);
     assert.match(result.stderr, /dedupe_threshold/);
+  });
+
+  it("new --body writes given body inline", () => {
+    const result = run(["new", "Inline body task", "--body", "Custom body text"], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "Custom body text\n");
+  });
+
+  it("new --body-file reads body from file", () => {
+    const specPath = join(dir, "spec.md");
+    writeFileSync(specPath, "# Spec\n\nDetails here.\n");
+    const result = run(["new", "From file", "--body-file", specPath], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "# Spec\n\nDetails here.\n");
+  });
+
+  it("new --body - reads body from stdin", () => {
+    const result = runWithStdin(
+      ["new", "Stdin task", "--body", "-"],
+      dir,
+      "Piped body content"
+    );
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "Piped body content\n");
+  });
+
+  it("new --body and --body-file are mutually exclusive", () => {
+    const result = run(
+      ["new", "T", "--body", "x", "--body-file", "y"],
+      dir
+    );
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /mutually exclusive/);
+  });
+
+  it("new --body with no value errors", () => {
+    const result = run(["new", "T", "--body"], dir);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /--body requires a value/);
+  });
+
+  it("new --body-file with no value errors", () => {
+    const result = run(["new", "T", "--body-file"], dir);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /--body-file requires a value/);
+  });
+
+  it("new --body-file with missing path errors actionably", () => {
+    const missing = join(dir, "does-not-exist.md");
+    const result = run(["new", "T", "--body-file", missing], dir);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /failed to read --body-file/);
+    assert.ok(result.stderr.includes(missing), "stderr should include the failing path");
+  });
+
+  it("new without body flag preserves default body", () => {
+    const result = run(["new", "Default body"], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "# Default body\n\n");
+  });
+
+  it("new --body=value accepts equals-sign syntax", () => {
+    const result = run(["new", "Eq form", "--body=inline content"], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "inline content\n");
+  });
+
+  it("new --body-file=path accepts equals-sign syntax", () => {
+    const specPath = join(dir, "spec-eq.md");
+    writeFileSync(specPath, "from eq form\n");
+    const result = run(["new", "Eq file", `--body-file=${specPath}`], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "from eq form\n");
+  });
+
+  it("new --body= (empty via equals) errors actionably", () => {
+    const result = run(["new", "T", "--body="], dir);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /--body requires a value/);
+  });
+
+  it("new --body-file= (empty via equals) errors actionably", () => {
+    const result = run(["new", "T", "--body-file="], dir);
+    assert.equal(result.exitCode, 2);
+    assert.match(result.stderr, /--body-file requires a value/);
+  });
+
+  it("value-bearing flags without a value error before crashing in commands", () => {
+    // Regression: parser used to set value-bearing flags to `true` when given
+    // no value; cmdNew/cmdEdit/cmdList would then call .toLowerCase() on the
+    // boolean and crash. Now parseArgs throws an actionable error.
+    for (const flag of ["--priority", "--tags", "--source", "--status", "--tag"]) {
+      const result = run(["new", "T", flag], dir);
+      assert.equal(result.exitCode, 2, `${flag} should exit 2`);
+      assert.match(
+        result.stderr,
+        new RegExp(`${flag.slice(2)} requires a value`),
+        `${flag} stderr should mention requires a value`
+      );
+    }
+  });
+
+  it("body containing frontmatter delimiters round-trips safely", () => {
+    // Use --body-file: an inline value starting with -- would be parsed as a flag.
+    const adversarial = "---\ninjected: yes\nstatus: done\n---\nreal body line";
+    const specPath = join(dir, "adversarial.md");
+    writeFileSync(specPath, adversarial);
+    const result = run(["new", "Adversarial", "--body-file", specPath], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    assert.equal(files.length, 1);
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    const { meta, body } = parseFrontmatter(content);
+
+    assert.equal(meta["title"], "Adversarial");
+    assert.equal(meta["status"], "open");
+    assert.equal(meta["injected"], undefined);
+    assert.equal(body, adversarial + "\n");
+  });
+
+  it("new --body-file normalizes CRLF line endings to LF", () => {
+    const specPath = join(dir, "crlf.md");
+    writeFileSync(specPath, "line1\r\nline2\r\nline3\r\n");
+    const result = run(["new", "CRLF body", "--body-file", specPath], dir);
+    assert.equal(result.exitCode, 0);
+
+    const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
+    const content = readFileSync(join(dir, "backlog", files[0]), "utf-8");
+    assert.ok(!content.includes("\r"), "stored file must not contain carriage returns");
+    const { body } = parseFrontmatter(content);
+    assert.equal(body, "line1\nline2\nline3\n");
   });
 });
