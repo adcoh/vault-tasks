@@ -5,3 +5,12 @@ dist/
 *.tgz
 .env*
 coverage/
+
+# Python wheel build artifacts (vault-tasks pip distribution)
+python/vault_tasks/_bundle/
+python/dist/
+python/build/
+python/*.egg-info/
+__pycache__/
+*.pyc
+.venv/

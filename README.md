@@ -18,6 +18,18 @@ npx vault-tasks <command>
 
 Requires Node.js >= 20.
 
+### Python projects (pip / uv)
+
+If your project's lockfile is Python-based and you'd rather pin vault-tasks alongside your other dev dependencies:
+
+```bash
+pip install vault-tasks
+# or
+uv add --dev vault-tasks
+```
+
+The pip wheel is small (~100 KB) and bundles the same compiled JS that ships on npm. It still requires `node` (>= 20) on `PATH` — the wheel does not vendor a Node.js runtime.
+
 ## Quick start
 
 ```bash
