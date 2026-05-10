@@ -232,17 +232,17 @@ function main(): void {
   }
 
   // install-skills needs vault root but not necessarily a full config
-  if (command === "install-skills") {
-    cmdInstallSkills(config, {
-      install: args["install"] === true,
-      list: args["list"] === true,
-      update: args["update"] === true,
-    });
-    return;
-  }
 
   try {
     switch (command) {
+      case "install-skills":
+        cmdInstallSkills(config, {
+          install: args["install"] === true,
+          list: args["list"] === true,
+          update: args["update"] === true,
+        });
+        break;
+
       case "new":
         if (!positional[0]) {
           console.error("Usage: vt new <title> [--priority P] [--tags t1,t2] [--source S] [--commit] [--body TEXT|--body-file PATH]");

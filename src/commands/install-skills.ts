@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -13,7 +14,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Templates are at the package root: ../../templates/ (from dist/commands/)
+// VAULT_TASKS_TEMPLATES_DIR overrides this — used by the pip wheel shim,
+// which installs templates inside the Python package rather than alongside dist/.
 function getTemplatesDir(): string {
+  const envOverride = process.env.VAULT_TASKS_TEMPLATES_DIR;
+  if (envOverride) {
+    let stat;
+    try {
+      stat = statSync(envOverride);
+    } catch {
+      throw new Error(
+        `VAULT_TASKS_TEMPLATES_DIR is set to '${envOverride}' but that path does not exist. Unset it or point it at a valid templates directory.`
+      );
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(
+        `VAULT_TASKS_TEMPLATES_DIR is set to '${envOverride}' but that path is not a directory. Unset it or point it at a valid templates directory.`
+      );
+    }
+    return envOverride;
+  }
   // From dist/commands/, go up two levels to package root
   const packageRoot = resolve(__dirname, "..", "..");
   const templatesDir = join(packageRoot, "templates");

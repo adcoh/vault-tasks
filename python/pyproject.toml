@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vault-tasks"
+dynamic = ["version"]
+description = "Markdown-file task manager for solo devs building with Claude Code"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Adam Cohn" }]
+keywords = [
+  "tasks",
+  "backlog",
+  "obsidian",
+  "claude-code",
+  "markdown",
+  "zettelkasten",
+  "second-brain",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: JavaScript",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development",
+  "Topic :: Utilities",
+]
+
+[project.scripts]
+vault-tasks = "vault_tasks.__main__:main"
+vt = "vault_tasks.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/adcoh/vault-tasks"
+Repository = "https://github.com/adcoh/vault-tasks"
+Issues = "https://github.com/adcoh/vault-tasks/issues"
+Changelog = "https://github.com/adcoh/vault-tasks/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "vault_tasks/_version.py"
+
+[tool.hatch.build]
+# _bundle/ is gitignored (it is a build artifact staged by
+# scripts/build-wheel.mjs from package.json + dist/ + templates/). Without
+# this, hatchling honors .gitignore and silently drops the JS files from
+# the wheel. `artifacts` re-includes them.
+artifacts = [
+  "vault_tasks/_bundle/**",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["vault_tasks"]
+
+[tool.hatch.build.targets.sdist]
+# sdist must be self-contained: include the staged bundle so reproducing the
+# wheel from sdist does not require Node.js to be present on the builder.
+include = [
+  "vault_tasks/**",
+  "README.md",
+  "pyproject.toml",
+]
