@@ -38,6 +38,8 @@ Options (vary by command):
   --priority, -p        high, medium, or low
   --tags, -t            Comma-separated tags
   --source, -s          Where this was noticed
+  --body                Task body as inline string (use - for stdin)
+  --body-file           Task body read from file path
   --commit              Git commit after creating
   --no-dedupe           Skip duplicate detection (new)
   --status              Filter or set status
@@ -67,6 +69,40 @@ const BOOLEAN_FLAGS = new Set([
   "quiet",
   "no-suggestions",
 ]);
+
+// Flags that require a value. parseArgs throws an actionable error when one
+// of these is passed without a value (e.g. `vt new T --priority` followed by
+// EOL or another flag) so commands never receive a boolean for a string field.
+const VALUE_FLAGS = new Set([
+  "priority",
+  "tags",
+  "source",
+  "body",
+  "body-file",
+  "status",
+  "tag",
+  "days",
+  "only",
+  "scope",
+]);
+
+const VALUE_FLAG_HINTS: Record<string, string> = {
+  priority: "high, medium, or low",
+  tags: "comma-separated tag names",
+  source: "where this was noticed (e.g. [[2026-05-09]])",
+  body: "a string, or '-' to read from stdin",
+  "body-file": "a file path",
+  status: "open, in-progress, done, or wont-do",
+  tag: "a tag name",
+  days: "a positive integer",
+  only: "broken|orphans|stale|drift",
+  scope: "a directory",
+};
+
+function missingValueError(key: string): Error {
+  const hint = VALUE_FLAG_HINTS[key];
+  return new Error(`Flag --${key} requires a value${hint ? ` (${hint})` : ""}.`);
+}
 
 function isFlag(arg: string): boolean {
   if (arg.startsWith("--")) return true;
@@ -109,6 +145,9 @@ function parseArgs(argv: string[]): { command: string; args: Record<string, stri
           );
         }
       } else {
+        if (VALUE_FLAGS.has(key) && rawValue === "") {
+          throw missingValueError(key);
+        }
         args[key] = rawValue;
       }
       i++;
@@ -125,6 +164,8 @@ function parseArgs(argv: string[]): { command: string; args: Record<string, stri
         if (next && !isFlag(next)) {
           args[key] = next;
           i += 2;
+        } else if (VALUE_FLAGS.has(key)) {
+          throw missingValueError(key);
         } else {
           args[key] = true;
           i++;
@@ -140,6 +181,8 @@ function parseArgs(argv: string[]): { command: string; args: Record<string, stri
         if (next && !isFlag(next)) {
           args[key] = next;
           i += 2;
+        } else if (VALUE_FLAGS.has(key)) {
+          throw missingValueError(key);
         } else {
           args[key] = true;
           i++;
@@ -169,7 +212,7 @@ function main(): void {
     ({ command, args, positional } = parseArgs(rawArgs));
   } catch (err) {
     console.error((err as Error).message);
-    process.exitCode = 1;
+    process.exitCode = 2;
     return;
   }
 
@@ -202,7 +245,7 @@ function main(): void {
     switch (command) {
       case "new":
         if (!positional[0]) {
-          console.error("Usage: vt new <title> [--priority P] [--tags t1,t2] [--source S] [--commit]");
+          console.error("Usage: vt new <title> [--priority P] [--tags t1,t2] [--source S] [--commit] [--body TEXT|--body-file PATH]");
           process.exitCode = 1;
           return;
         }
@@ -211,6 +254,8 @@ function main(): void {
           priority: (args["priority"] as string | undefined)?.toLowerCase(),
           tags: args["tags"] as string | undefined,
           source: args["source"] as string | undefined,
+          body: args["body"] as string | undefined,
+          bodyFile: args["body-file"] as string | undefined,
           commit: args["commit"] === true,
           noDedupe: args["no-dedupe"] === true,
         });
@@ -300,32 +345,15 @@ function main(): void {
         cmdTags(config);
         break;
 
-      case "lint": {
-        // --only and --scope are value-bearing flags. parseArgs sets them to
-        // `true` if the user passes the flag without a value (e.g. `--only`
-        // followed by another flag or end-of-args), so coerce explicitly
-        // rather than asserting the type away.
-        const onlyArg = args["only"];
-        const scopeArg = args["scope"];
-        if (onlyArg === true) {
-          console.error("Error: --only requires a value (broken|orphans|stale|drift)");
-          process.exitCode = 2;
-          return;
-        }
-        if (scopeArg === true) {
-          console.error("Error: --scope requires a value (a directory)");
-          process.exitCode = 2;
-          return;
-        }
+      case "lint":
         cmdLint(config, {
-          only: typeof onlyArg === "string" ? onlyArg : undefined,
-          scope: typeof scopeArg === "string" ? scopeArg : undefined,
+          only: args["only"] as string | undefined,
+          scope: args["scope"] as string | undefined,
           json: args["json"] === true,
           quiet: args["quiet"] === true,
           noSuggestions: args["no-suggestions"] === true,
         });
         break;
-      }
 
       default:
         console.error(`Unknown command: ${command}\n`);
