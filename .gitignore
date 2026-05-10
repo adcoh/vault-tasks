@@ -6,7 +6,10 @@ dist/
 .env*
 coverage/
 
-# Python wheel build artifacts (vault-tasks pip distribution)
+# Python wheel build artifacts (vault-tasks pip distribution).
+# python/README.md is regenerated from the repo-root README by
+# scripts/build-wheel.mjs so the PyPI page always shows the live doc.
+python/README.md
 python/vault_tasks/_bundle/
 python/dist/
 python/build/

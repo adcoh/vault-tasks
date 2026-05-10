@@ -14,9 +14,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
 const distDir = join(repoRoot, "dist");
 const templatesDir = join(repoRoot, "templates");
-const pythonPkgDir = join(repoRoot, "python", "vault_tasks");
+const pythonDir = join(repoRoot, "python");
+const pythonPkgDir = join(pythonDir, "vault_tasks");
 const bundleDir = join(pythonPkgDir, "_bundle");
 const packageJsonPath = join(repoRoot, "package.json");
+const rootReadmePath = join(repoRoot, "README.md");
+const pythonReadmePath = join(pythonDir, "README.md");
 
 function fail(msg) {
   console.error(`build-wheel: ${msg}`);
@@ -71,4 +74,16 @@ writeFileSync(
 );
 
 console.log(`build-wheel: wrote ${versionPyPath}`);
+
+// Mirror the repo-root README into python/README.md so the PyPI project page
+// shows the full command reference, not the short placeholder. The committed
+// python/README.md is kept as a fallback for `python -m build` runs that
+// skipped this script.
+if (!existsSync(rootReadmePath)) {
+  fail(`README.md not found at ${rootReadmePath}.`);
+}
+const rootReadme = readFileSync(rootReadmePath, "utf-8");
+writeFileSync(pythonReadmePath, rootReadme);
+console.log(`build-wheel: wrote ${pythonReadmePath} from repo-root README`);
+
 console.log(`build-wheel: bundle ready. Next: 'cd python && python -m build'`);
