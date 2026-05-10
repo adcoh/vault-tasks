@@ -7,7 +7,7 @@
 // Pure stdlib — no extra deps. Fails loudly if anything is missing.
 
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -39,16 +39,22 @@ if (!existsSync(pythonPkgDir)) {
   fail(`python/vault_tasks/ not found at ${pythonPkgDir}. Did you check out the wheel scaffolding?`);
 }
 
-// PEP 440 version sanity. package.json uses semver — strip pre-release/build
-// metadata that PEP 440 would reject in `dynamic = ["version"]` lookups.
-// For now we require a clean MAJOR.MINOR.PATCH to keep wheels reproducible;
-// pre-release hand-publishing can be added later if needed.
+// Version source: VAULT_TASKS_VERSION_OVERRIDE env var (used by the TestPyPI
+// dispatch workflow to mint unique dev versions like `0.3.0.dev17`) takes
+// precedence over package.json. For real releases the override is unset and
+// version comes from package.json — npm and PyPI ship in lockstep.
 const pkg = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
-const version = pkg.version;
-if (!/^\d+\.\d+\.\d+$/.test(version)) {
+const versionOverride = process.env.VAULT_TASKS_VERSION_OVERRIDE;
+const version = versionOverride || pkg.version;
+// Accept clean releases (1.2.3) or PEP 440 pre/dev/post variants used by the
+// TestPyPI dry-run path. Reject anything else early so a bad override does
+// not produce an unpublishable wheel.
+const versionPattern = /^\d+\.\d+\.\d+(?:(?:a|b|rc)\d+|\.dev\d+|\.post\d+)?$/;
+if (!versionPattern.test(version)) {
   fail(
-    `package.json version '${version}' is not a clean MAJOR.MINOR.PATCH. ` +
-      `PEP 440 / hatchling expect a stable release version for wheel builds.`
+    `version '${version}' is not a valid PEP 440 release. ` +
+      `Expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH.{devN|postN|aN|bN|rcN}.` +
+      (versionOverride ? ` (from VAULT_TASKS_VERSION_OVERRIDE)` : ` (from package.json)`)
   );
 }
 
@@ -59,9 +65,15 @@ rmSync(bundleDir, { recursive: true, force: true });
 mkdirSync(bundleDir, { recursive: true });
 
 // Copy compiled JS, but skip tests — the wheel only needs runtime artifacts.
+// Use path.relative + path.sep so the test-directory filter works on Windows
+// (where cpSync hands callbacks paths with `\\` separators) as well as POSIX.
 cpSync(distDir, join(bundleDir, "dist"), {
   recursive: true,
-  filter: (src) => !src.includes(`${distDir}/tests`) && !src.endsWith(".tsbuildinfo"),
+  filter: (src) => {
+    if (src.endsWith(".tsbuildinfo")) return false;
+    const rel = relative(distDir, src);
+    return rel !== "tests" && !rel.startsWith(`tests${sep}`);
+  },
 });
 
 cpSync(templatesDir, join(bundleDir, "templates"), { recursive: true });
@@ -76,9 +88,9 @@ writeFileSync(
 console.log(`build-wheel: wrote ${versionPyPath}`);
 
 // Mirror the repo-root README into python/README.md so the PyPI project page
-// shows the full command reference, not the short placeholder. The committed
-// python/README.md is kept as a fallback for `python -m build` runs that
-// skipped this script.
+// shows the full command reference. python/README.md is gitignored; running
+// `python -m build` directly without first running this script will fail
+// fast with hatchling's "README.md not found" rather than shipping a stub.
 if (!existsSync(rootReadmePath)) {
   fail(`README.md not found at ${rootReadmePath}.`);
 }

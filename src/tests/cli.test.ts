@@ -53,6 +53,30 @@ function runWithStdin(args: string[], cwd: string, input: string): RunResult {
   }
 }
 
+function runWithEnv(
+  args: string[],
+  cwd: string,
+  env: Record<string, string>
+): RunResult {
+  try {
+    const stdout = execFileSync("node", [CLI, ...args], {
+      cwd,
+      encoding: "utf-8",
+      timeout: 10000,
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, ...env },
+    });
+    return { stdout, stderr: "", exitCode: 0 };
+  } catch (err) {
+    const e = err as { stdout?: string; stderr?: string; status?: number };
+    return {
+      stdout: e.stdout ?? "",
+      stderr: e.stderr ?? "",
+      exitCode: e.status ?? 1,
+    };
+  }
+}
+
 /** Write a config file that forces sequential ID strategy for backwards-compat tests */
 function writeSequentialConfig(dir: string): void {
   writeFileSync(
@@ -787,5 +811,26 @@ describe("CLI config validation", () => {
     assert.ok(!content.includes("\r"), "stored file must not contain carriage returns");
     const { body } = parseFrontmatter(content);
     assert.equal(body, "line1\nline2\nline3\n");
+  });
+
+  it("install-skills with bad VAULT_TASKS_TEMPLATES_DIR errors cleanly (not a stack trace)", () => {
+    // Regression: cmdInstallSkills can throw on a bad env override. The
+    // command must run inside the CLI's main try/catch so users get a clean
+    // one-line error and a non-zero exit code, not an unhandled exception.
+    const missing = join(dir, "does-not-exist-templates-dir");
+    const result = runWithEnv(
+      ["install-skills", "--list"],
+      dir,
+      { VAULT_TASKS_TEMPLATES_DIR: missing }
+    );
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /VAULT_TASKS_TEMPLATES_DIR/);
+    assert.ok(result.stderr.includes(missing), "error must include the offending path");
+    // No "at <stack frame>" lines should appear — that would indicate an
+    // uncaught exception bubbling up rather than the CLI's catch handler.
+    assert.ok(
+      !/^\s*at\s+/m.test(result.stderr),
+      "stderr must not contain a stack trace; got:\n" + result.stderr
+    );
   });
 });

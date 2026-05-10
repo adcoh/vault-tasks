@@ -3,6 +3,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -18,9 +19,17 @@ const __dirname = dirname(__filename);
 function getTemplatesDir(): string {
   const envOverride = process.env.VAULT_TASKS_TEMPLATES_DIR;
   if (envOverride) {
-    if (!existsSync(envOverride)) {
+    let stat;
+    try {
+      stat = statSync(envOverride);
+    } catch {
       throw new Error(
-        `VAULT_TASKS_TEMPLATES_DIR is set to '${envOverride}' but that directory does not exist. Unset it or point it at a valid templates directory.`
+        `VAULT_TASKS_TEMPLATES_DIR is set to '${envOverride}' but that path does not exist. Unset it or point it at a valid templates directory.`
+      );
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(
+        `VAULT_TASKS_TEMPLATES_DIR is set to '${envOverride}' but that path is not a directory. Unset it or point it at a valid templates directory.`
       );
     }
     return envOverride;

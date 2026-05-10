@@ -145,7 +145,28 @@ describe("install-skills VAULT_TASKS_TEMPLATES_DIR override", () => {
           err.message.includes(missing),
           "error must include the offending path"
         );
+        assert.match(err.message, /does not exist/);
         assert.match(err.message, /Unset it or point it/);
+        return true;
+      }
+    );
+  });
+
+  it("errors actionably when VAULT_TASKS_TEMPLATES_DIR points at a file, not a directory", () => {
+    const filePath = join(templatesDir, "not-a-dir.txt");
+    writeFileSync(filePath, "not a directory");
+    process.env.VAULT_TASKS_TEMPLATES_DIR = filePath;
+    assert.throws(
+      () => {
+        cmdInstallSkills(makeConfig(vaultRoot), { list: true });
+      },
+      (err: Error) => {
+        assert.match(err.message, /VAULT_TASKS_TEMPLATES_DIR/);
+        assert.ok(
+          err.message.includes(filePath),
+          "error must include the offending path"
+        );
+        assert.match(err.message, /not a directory/);
         return true;
       }
     );
