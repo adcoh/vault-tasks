@@ -686,7 +686,7 @@ describe("CLI config validation", () => {
   it("new --body-file with no value errors", () => {
     const result = run(["new", "T", "--body-file"], dir);
     assert.equal(result.exitCode, 2);
-    assert.match(result.stderr, /--body-file requires a path/);
+    assert.match(result.stderr, /--body-file requires a value/);
   });
 
   it("new --body-file with missing path errors actionably", () => {
@@ -739,7 +739,22 @@ describe("CLI config validation", () => {
   it("new --body-file= (empty via equals) errors actionably", () => {
     const result = run(["new", "T", "--body-file="], dir);
     assert.equal(result.exitCode, 2);
-    assert.match(result.stderr, /--body-file requires a path/);
+    assert.match(result.stderr, /--body-file requires a value/);
+  });
+
+  it("value-bearing flags without a value error before crashing in commands", () => {
+    // Regression: parser used to set value-bearing flags to `true` when given
+    // no value; cmdNew/cmdEdit/cmdList would then call .toLowerCase() on the
+    // boolean and crash. Now parseArgs throws an actionable error.
+    for (const flag of ["--priority", "--tags", "--source", "--status", "--tag"]) {
+      const result = run(["new", "T", flag], dir);
+      assert.equal(result.exitCode, 2, `${flag} should exit 2`);
+      assert.match(
+        result.stderr,
+        new RegExp(`${flag.slice(2)} requires a value`),
+        `${flag} stderr should mention requires a value`
+      );
+    }
   });
 
   it("body containing frontmatter delimiters round-trips safely", () => {
