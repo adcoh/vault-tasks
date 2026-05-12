@@ -156,6 +156,97 @@ More text`;
     const { meta } = parseFrontmatter(text);
     assert.deepEqual(meta["tags"], ["auth", "security"]);
   });
+
+  it("joins folded-scalar continuation lines onto the parent key", () => {
+    // YAML plain-style folding: a long value can wrap across indented
+    // continuation lines, joined with a single space on parse.
+    // Falsifying test for the data-loss bug where continuation lines
+    // matched neither the list nor kv regex and were silently dropped,
+    // truncating the parsed value to just the first line.
+    const text = `---
+title: Voice control modal repeatedly appears with audio format validation error after
+  recording session
+status: open
+---
+Body`;
+    const { meta } = parseFrontmatter(text);
+    assert.equal(
+      meta["title"],
+      "Voice control modal repeatedly appears with audio format validation error after recording session"
+    );
+    assert.equal(meta["status"], "open");
+  });
+
+  it("joins multiple folded-scalar continuation lines", () => {
+    const text = `---
+title: One
+  two
+  three
+---
+Body`;
+    const { meta } = parseFrontmatter(text);
+    assert.equal(meta["title"], "One two three");
+  });
+
+  it("handles folded scalar where parent key has empty initial value", () => {
+    // `title:` with no inline value followed by an indented continuation —
+    // the continuation should NOT be prefixed with a leading space.
+    const text = "---\ntitle:\n  starts on next line\n---\nBody";
+    const { meta } = parseFrontmatter(text);
+    assert.equal(meta["title"], "starts on next line");
+  });
+
+  it("does not absorb subsequent block-list items into a folded scalar", () => {
+    // Critical invariant: a folded scalar must not accidentally swallow
+    // the start of a following list. After `title:` wraps onto its
+    // continuation, the next `tags:` line resets `currentKey` and the
+    // `- audio` line must be parsed as a list item.
+    const text = `---
+title: First line
+  second line
+tags:
+  - audio
+  - voice
+---
+Body`;
+    const { meta } = parseFrontmatter(text);
+    assert.equal(meta["title"], "First line second line");
+    assert.deepEqual(meta["tags"], ["audio", "voice"]);
+  });
+
+  it("parses zero-indent block-list items", () => {
+    // YAML 1.2 allows a block sequence at the same indent as its parent
+    // mapping key. The exact reproducer file from #9 used this style;
+    // before the fix, every `- tag` line silently fell through every
+    // regex branch and was dropped, leaving `tags` as an empty array.
+    // The user only masked this by re-supplying all tags in `--tags`.
+    const text = `---
+tags:
+- audio
+- voice-control
+- permissions
+---
+Body`;
+    const { meta } = parseFrontmatter(text);
+    assert.deepEqual(meta["tags"], ["audio", "voice-control", "permissions"]);
+  });
+
+  it("treats `- foo` as scalar continuation, not a list, when key already has a value", () => {
+    // Adversarial input from qodo review: a continuation line whose first
+    // non-whitespace char is `-` must NOT silently flip a string scalar
+    // into a list (which would drop the first line). The listMatch
+    // branch is guarded against firing when `meta[currentKey]` is
+    // already a non-empty string.
+    const text = `---
+title: Foo
+  - bar
+status: open
+---
+Body`;
+    const { meta } = parseFrontmatter(text);
+    assert.equal(meta["title"], "Foo - bar");
+    assert.equal(meta["status"], "open");
+  });
 });
 
 describe("writeFrontmatter", () => {
@@ -263,6 +354,33 @@ tags:
     );
     assert.equal(parsed["id"], ulid);
     assert.equal(typeof parsed["id"], "string");
+  });
+
+  it("round-trips folded-scalar titles without data loss", () => {
+    // CLAUDE.md: "round-trip safety is non-negotiable —
+    // parse(write(data)) must return the same data." A title that arrives
+    // as a YAML folded scalar must survive parse→write→parse intact, even
+    // if write emits it on a single line. Asserts full deep equality of
+    // the meta object — not just selected fields — so future regressions
+    // that silently coerce or drop a key are caught.
+    const original = `---
+title: Voice control modal repeatedly appears with audio format validation error after
+  recording session
+status: open
+priority: high
+tags:
+  - audio
+  - voice-control
+---
+Body`;
+    const { meta } = parseFrontmatter(original);
+    const written = writeFrontmatter(meta, "Body");
+    const { meta: roundTripped } = parseFrontmatter(written);
+    assert.deepEqual(roundTripped, meta);
+    assert.equal(
+      roundTripped["title"],
+      "Voice control modal repeatedly appears with audio format validation error after recording session"
+    );
   });
 
   it("round-trips a purely-numeric id string without becoming a number", () => {
