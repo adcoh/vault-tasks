@@ -17,6 +17,17 @@ All notable changes to this project will be documented here.
   write.** Custom keys outside the known-keys set (e.g. `oncall_fix_kind`,
   bespoke Obsidian properties) are now emitted *after* the standard
   fields, eliminating diff noise on every save.
+- **Zero-indent block-list items are no longer silently dropped.** Tag
+  lists written at column 0 (`tags:\n- audio\n- voice-control`, the style
+  Obsidian and the reproducer in #9 both use) used to fall through every
+  regex branch in the parser and disappear, leaving `tags` as an empty
+  array. A subsequent `vt done` / `vt edit --priority …` would then
+  serialize the empty array back to disk, deleting the user's tags.
+- **Hyphen-prefixed scalar continuations are no longer misparsed as
+  list items.** A folded scalar whose continuation line starts with `-`
+  (e.g. `title: Foo\n  - bar`) used to flip the string into a single-item
+  array `["bar"]`, dropping the first line. The list-item branch is now
+  guarded so it only fires when the current key is expecting a list.
 
 ## 0.3.0
 

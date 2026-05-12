@@ -213,6 +213,40 @@ Body`;
     assert.equal(meta["title"], "First line second line");
     assert.deepEqual(meta["tags"], ["audio", "voice"]);
   });
+
+  it("parses zero-indent block-list items", () => {
+    // YAML 1.2 allows a block sequence at the same indent as its parent
+    // mapping key. The exact reproducer file from #9 used this style;
+    // before the fix, every `- tag` line silently fell through every
+    // regex branch and was dropped, leaving `tags` as an empty array.
+    // The user only masked this by re-supplying all tags in `--tags`.
+    const text = `---
+tags:
+- audio
+- voice-control
+- permissions
+---
+Body`;
+    const { meta } = parseFrontmatter(text);
+    assert.deepEqual(meta["tags"], ["audio", "voice-control", "permissions"]);
+  });
+
+  it("treats `- foo` as scalar continuation, not a list, when key already has a value", () => {
+    // Adversarial input from qodo review: a continuation line whose first
+    // non-whitespace char is `-` must NOT silently flip a string scalar
+    // into a list (which would drop the first line). The listMatch
+    // branch is guarded against firing when `meta[currentKey]` is
+    // already a non-empty string.
+    const text = `---
+title: Foo
+  - bar
+status: open
+---
+Body`;
+    const { meta } = parseFrontmatter(text);
+    assert.equal(meta["title"], "Foo - bar");
+    assert.equal(meta["status"], "open");
+  });
 });
 
 describe("writeFrontmatter", () => {
@@ -326,23 +360,27 @@ tags:
     // CLAUDE.md: "round-trip safety is non-negotiable —
     // parse(write(data)) must return the same data." A title that arrives
     // as a YAML folded scalar must survive parse→write→parse intact, even
-    // if write emits it on a single line.
+    // if write emits it on a single line. Asserts full deep equality of
+    // the meta object — not just selected fields — so future regressions
+    // that silently coerce or drop a key are caught.
     const original = `---
 title: Voice control modal repeatedly appears with audio format validation error after
   recording session
 status: open
 priority: high
+tags:
+  - audio
+  - voice-control
 ---
 Body`;
     const { meta } = parseFrontmatter(original);
     const written = writeFrontmatter(meta, "Body");
     const { meta: roundTripped } = parseFrontmatter(written);
+    assert.deepEqual(roundTripped, meta);
     assert.equal(
       roundTripped["title"],
       "Voice control modal repeatedly appears with audio format validation error after recording session"
     );
-    assert.equal(roundTripped["status"], "open");
-    assert.equal(roundTripped["priority"], "high");
   });
 
   it("round-trips a purely-numeric id string without becoming a number", () => {

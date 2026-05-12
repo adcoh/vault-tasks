@@ -99,9 +99,20 @@ export function parseFrontmatter(
   let currentList: string[] | null = null;
 
   for (const line of fmBlock.split("\n")) {
-    // List item (e.g. "  - value")
-    const listMatch = line.match(/^\s+-\s+(.+)$/);
-    if (listMatch && currentKey) {
+    // List item (e.g. "- value" or "  - value"). YAML 1.2 allows a block
+    // sequence at the same indent as its parent mapping key, so we accept
+    // zero or more leading spaces. The guard is critical: a `- foo` line
+    // is only a list item when the current key is *expecting* one — i.e.
+    // we're already inside a list, or its value is the empty string
+    // (signaling "value follows on the next lines"). Otherwise an indented
+    // continuation like `title: Foo\n  - bar` would silently convert the
+    // string scalar into a list and drop the first line.
+    const listMatch = line.match(/^\s*-\s+(.+)$/);
+    if (
+      listMatch &&
+      currentKey !== null &&
+      (currentList !== null || meta[currentKey] === "")
+    ) {
       if (currentList === null) {
         currentList = [];
       }

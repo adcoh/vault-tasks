@@ -175,13 +175,20 @@ describe("TaskStore", () => {
     store.update("1", { priority: "high" });
 
     const afterUpdate = readFileSync(task.filePath, "utf-8");
-    const titleIdx = afterUpdate.indexOf("title:");
+    // Pin against ALL known keys, not just the first. The original bug
+    // moved every known key below extras; a regression where only one
+    // known key (e.g. `source`) drifted would slip past a `title < extra`
+    // assertion.
     const extraIdx = afterUpdate.indexOf("oncall_fix_kind:");
-    assert.ok(titleIdx >= 0 && extraIdx >= 0, "both fields must be present");
-    assert.ok(
-      titleIdx < extraIdx,
-      `extra meta must appear AFTER known keys; got title@${titleIdx} extra@${extraIdx}`
-    );
+    assert.ok(extraIdx >= 0, "extra meta key must be present");
+    for (const knownKey of ["title:", "status:", "priority:", "tags:", "created:", "source:"]) {
+      const knownIdx = afterUpdate.indexOf(knownKey);
+      assert.ok(knownIdx >= 0, `${knownKey} must be present`);
+      assert.ok(
+        knownIdx < extraIdx,
+        `${knownKey} must appear before extras; got ${knownKey}@${knownIdx} extra@${extraIdx}`
+      );
+    }
   });
 
   it("rejects invalid priority", () => {
