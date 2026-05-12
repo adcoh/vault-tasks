@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented here.
 
+## Unreleased
+
+### Fixed
+
+- **Folded-scalar frontmatter values are no longer silently truncated.**
+  A YAML plain-style scalar that wrapped across an indented continuation
+  line (e.g. `title:` followed by `  recording session`) used to lose
+  everything after the first line on parse — and any subsequent `vt edit`
+  / `vt done` / `vt start` etc. would write the truncated value back to
+  disk. Continuation lines are now joined onto the parent key with a
+  single space, matching YAML's standard folding rule. ([#9](https://github.com/adcoh/vault-tasks/issues/9))
+- **Extra frontmatter fields no longer drift to the top of the block on
+  write.** Custom keys outside the known-keys set (e.g. `oncall_fix_kind`,
+  bespoke Obsidian properties) are now emitted *after* the standard
+  fields, eliminating diff noise on every save.
+
 ## 0.3.0
 
 ### Added

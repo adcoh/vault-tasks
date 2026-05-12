@@ -110,6 +110,29 @@ export function parseFrontmatter(
       continue;
     }
 
+    // Folded-scalar continuation. A YAML plain-style scalar can wrap across
+    // multiple indented lines:
+    //
+    //     title: Long title that wraps
+    //       across two lines
+    //
+    // YAML joins those with a single space. Without this branch, the
+    // continuation line matches neither the list nor kv regex above and is
+    // silently dropped — the parsed `title` becomes just the first line,
+    // and a write-back truncates the file. Only fires when the current key
+    // is a string (not a list) and the line is indented + non-empty.
+    if (
+      currentKey !== null &&
+      currentList === null &&
+      typeof meta[currentKey] === "string" &&
+      /^\s+\S/.test(line)
+    ) {
+      const prev = meta[currentKey] as string;
+      const cont = line.trim();
+      meta[currentKey] = prev ? `${prev} ${cont}` : cont;
+      continue;
+    }
+
     // Key-value pair — allow dots, hyphens, underscores in keys
     const kvMatch = line.match(/^([\w][\w.\-]*):\s*(.*)$/);
     if (kvMatch) {

@@ -158,6 +158,32 @@ describe("TaskStore", () => {
     assert.equal(afterUpdate.extraMeta["due"], "2026-04-15");
   });
 
+  it("keeps extra meta fields below the known fields on update", () => {
+    // Falsifying test for the diff-noise bug where `taskToMarkdown` spread
+    // `...extraMeta` BEFORE the known keys, drifting custom frontmatter
+    // (e.g. `oncall_fix_kind`) to the top of the block on every write.
+    // The relative order of `title`, `status`, `priority`, `tags`,
+    // `created`, `source` must come before any extra key after an update.
+    const task = store.create({ title: "Order check" });
+    const content = readFileSync(task.filePath, "utf-8");
+    const modified = content.replace(
+      "\n---\n",
+      "\noncall_fix_kind: real-bug\n---\n"
+    );
+    writeFileSync(task.filePath, modified);
+
+    store.update("1", { priority: "high" });
+
+    const afterUpdate = readFileSync(task.filePath, "utf-8");
+    const titleIdx = afterUpdate.indexOf("title:");
+    const extraIdx = afterUpdate.indexOf("oncall_fix_kind:");
+    assert.ok(titleIdx >= 0 && extraIdx >= 0, "both fields must be present");
+    assert.ok(
+      titleIdx < extraIdx,
+      `extra meta must appear AFTER known keys; got title@${titleIdx} extra@${extraIdx}`
+    );
+  });
+
   it("rejects invalid priority", () => {
     assert.throws(() => store.create({ title: "Bad", priority: "urgent" }), /Invalid priority/);
   });

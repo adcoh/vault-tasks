@@ -85,14 +85,20 @@ function fileToTask(filePath: string, text: string): Task {
 }
 
 function taskToMarkdown(task: Task): string {
+  // Known keys first, extras LAST. Spreading `extraMeta` first would drift
+  // unknown frontmatter fields (e.g. `oncall_fix_kind`, custom Obsidian
+  // properties) to the TOP of the frontmatter block on every save, churning
+  // git diffs without changing data. `fileToTask` filters out known keys
+  // before populating `extraMeta`, so there's no clobber risk from doing
+  // the spread last.
   const meta: Record<string, unknown> = {
-    ...task.extraMeta,
     title: task.title,
     status: task.status,
     priority: task.priority,
     tags: task.tags,
     created: task.created,
     source: task.source,
+    ...task.extraMeta,
   };
   return writeFrontmatter(meta, task.body);
 }
