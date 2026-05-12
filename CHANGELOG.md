@@ -2,10 +2,28 @@
 
 All notable changes to this project will be documented here.
 
-## Unreleased
+## 0.4.0
+
+### Added
+
+- **pip / uv installation.** `vault-tasks` is now distributed as a Python
+  wheel (`py3-none-any`, ~125 KB) alongside the existing npm package, so it
+  can be pinned in `pyproject.toml` / `uv.lock` as a dev dependency. The
+  wheel bundles the same compiled JS and templates as the npm build; a
+  Python entry point locates `node` on PATH and execs the CLI. Errors
+  with exit 127 and an actionable message if Node.js isn't installed.
+  ([#8](https://github.com/adcoh/vault-tasks/pull/8))
+- **`vt new` body content from CLI.** Three new input shapes for supplying
+  a real markdown body at creation time instead of the auto-generated
+  `# {title}` placeholder: `--body "text"` for inline strings,
+  `--body-file <path>` to read from disk, and `--body -` to read from stdin.
 
 ### Fixed
 
+- **Argument parsing crash on missing flag values.** `vt new T --priority`
+  (and similar value-bearing flags supplied without a value) used to crash
+  because the boolean fallback was passed into `.toLowerCase()`. Now
+  errors cleanly with a helpful message.
 - **Folded-scalar frontmatter values are no longer silently truncated.**
   A YAML plain-style scalar that wrapped across an indented continuation
   line (e.g. `title:` followed by `  recording session`) used to lose
