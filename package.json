@@ -1,6 +1,6 @@
 {
   "name": "vault-tasks",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Markdown-file task manager for solo devs building with Claude Code",
   "type": "module",
   "bin": {
