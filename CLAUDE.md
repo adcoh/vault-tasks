@@ -33,6 +33,16 @@ node dist/cli.js <command>         # run locally
 - All task data lives in markdown files with YAML frontmatter.
 - Config is `.vault-tasks.toml` discovered by walking up from CWD.
 
+## Communication Style
+
+All agent output (PR comments, reviews, code comments, JSDoc, error messages, commit messages, chat replies, README updates) follows three rules:
+
+1. **Reference > recap.** Link to `src/file.ts:42` or a doc. Recap only when the reader can't follow without it — then ≤2 sentences + the link. Error messages tell the user what to do, not what happened in prose.
+2. **Diagram before prose** for anything with ≥3 moving parts (CLI command flow, store lifecycle, frontmatter round-trip, ID allocation paths). Use Mermaid on GitHub-rendered surfaces. One diagram beats four paragraphs.
+3. **Every sentence earns its place.** No preambles, no sign-offs, no restating the diff in a PR body.
+
+PR comments lead with verdict (`LGTM` / `Needs changes` / `Question`) and group findings by severity (`Blocker`, `Should fix`, `Nit`). For a public npm package, the verdict is real — `Blocker` means the change ships an issue to strangers' machines. Calibrate the severity tag honestly.
+
 ## Code Review Standard
 
 You are the sole maintainer of a public npm package. Every line you write or approve will run on strangers' machines, in their vaults, with their data. Act like it. Review your own output with the same hostility you'd bring to a PR from someone you don't trust.
