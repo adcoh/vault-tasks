@@ -214,6 +214,53 @@ describe("CLI integration", () => {
     assert.match(result.stderr, /--limit must be a positive integer/);
   });
 
+  it("search --limit rejects values with trailing garbage", () => {
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "auth", "--mode", "bm25", "--limit", "5abc"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /--limit must be a positive integer/);
+  });
+
+  it("search --limit rejects fractional values", () => {
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "auth", "--mode", "bm25", "--limit", "2.5"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /--limit must be a positive integer/);
+  });
+
+  it("search --limit rejects unsafe-integer values", () => {
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "auth", "--mode", "bm25", "--limit", "99999999999999999999"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /--limit must be a positive integer/);
+  });
+
+  it("search rejects --like combined with a positional keyword", () => {
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "auth", "--like", "1", "--mode", "bm25"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /--like and a positional/);
+  });
+
+  it("search keyword mode applies --limit AFTER priority sort", () => {
+    run(["new", "low auth task", "--priority", "low"], dir);
+    run(["new", "another low auth task", "--priority", "low"], dir);
+    run(["new", "high auth task", "--priority", "high"], dir);
+    const result = run(["search", "auth", "--limit", "1"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("high auth task"),
+      `--limit 1 must keep the highest-priority match:\n${result.stdout}`);
+  });
+
+  it("search keyword mode matches task tags", () => {
+    run(["new", "Refactor module X", "--tags", "backend"], dir);
+    run(["new", "Unrelated UI fix", "--tags", "frontend"], dir);
+    const result = run(["search", "backend"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("Refactor module X"));
+    assert.ok(!result.stdout.includes("Unrelated UI fix"));
+  });
+
   it("search --like can target an archived task", () => {
     run(["new", "Fix auth bug"], dir);
     run(["new", "Auth refactor"], dir);

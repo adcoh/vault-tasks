@@ -106,11 +106,14 @@ describe("searchTasks", () => {
     assert.equal(hits.length, 2);
   });
 
-  it("rejects an unsupported mode", async () => {
+  it("falls through to a clear error if mode is bypassed via a cast", async () => {
+    // SearchMode is narrowed to 'keyword' | 'bm25' at compile time, so this
+    // requires a deliberate cast. The runtime guards against future modes
+    // being added to the type without a handler.
     store.create({ title: "Fix auth bug" });
     await assert.rejects(
-      () => searchTasks(store, "auth", { mode: "semantic" }),
-      /not available/
+      () => searchTasks(store, "auth", { mode: "semantic" as unknown as "bm25" }),
+      /Unhandled search mode/
     );
   });
 
@@ -120,6 +123,39 @@ describe("searchTasks", () => {
       () => searchTasks(store, "auth", { mode: "bm25", limit: 0 }),
       /positive integer/
     );
+  });
+
+  it("rejects unsafe-integer limits", async () => {
+    store.create({ title: "Fix auth bug" });
+    await assert.rejects(
+      () => searchTasks(store, "auth", { mode: "bm25", limit: 1e20 }),
+      /positive integer/
+    );
+  });
+
+  it("library default mode is keyword (matches CLI)", async () => {
+    store.create({ title: "Fix auth bug" });
+    const hits = await searchTasks(store, "auth");
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].mode, "keyword");
+  });
+
+  it("keyword mode matches tags, not just title and body", async () => {
+    store.create({ title: "Refactor module X", tags: ["backend"] });
+    store.create({ title: "Unrelated UI fix", tags: ["frontend"] });
+    const hits = await searchTasks(store, "backend", { mode: "keyword" });
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].task.title, "Refactor module X");
+  });
+
+  it("keyword mode results are priority-sorted", async () => {
+    store.create({ title: "low auth", priority: "low" });
+    store.create({ title: "high auth", priority: "high" });
+    store.create({ title: "medium auth", priority: "medium" });
+    const hits = await searchTasks(store, "auth", { mode: "keyword" });
+    assert.equal(hits[0].task.title, "high auth");
+    assert.equal(hits[1].task.title, "medium auth");
+    assert.equal(hits[2].task.title, "low auth");
   });
 });
 

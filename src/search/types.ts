@@ -1,6 +1,12 @@
 import type { Task } from "../task.js";
 
-export type SearchMode = "keyword" | "bm25" | "semantic" | "hybrid";
+/**
+ * Search modes available in this release. `'semantic'` and `'hybrid'` are
+ * planned but not yet implemented; they are deliberately omitted from this
+ * union so attempts to use them fail at compile time rather than producing a
+ * surprise runtime error.
+ */
+export type SearchMode = "keyword" | "bm25";
 
 export interface SearchHit {
   task: Task;

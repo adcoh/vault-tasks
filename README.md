@@ -209,9 +209,12 @@ const target = store.findIncludingArchive("0042");
 const related = await similarTasks(store, target, { mode: "bm25" });
 ```
 
-Available modes: `keyword` (legacy substring matching, default) and `bm25`
-(ranked by BM25 score). Semantic and hybrid modes are planned and will require
-an optional embedder peer dependency.
+Available modes: `keyword` (substring matching across title, body, AND tags;
+priority-sorted; the default for both the CLI and `searchTasks`) and `bm25`
+(ranked by BM25 score; title-weighted document construction). Semantic and
+hybrid modes are planned and will require an optional embedder peer
+dependency; until then they are deliberately excluded from the `SearchMode`
+type so accidental use is a compile-time error rather than a runtime crash.
 
 ## License
 

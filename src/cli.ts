@@ -113,6 +113,59 @@ function missingValueError(key: string): Error {
   return new Error(`Flag --${key} requires a value${hint ? ` (${hint})` : ""}.`);
 }
 
+/**
+ * Sentinel returned by parsePositiveIntFlag when validation fails. The caller
+ * is expected to short-circuit (the helper already wrote an error and set the
+ * exit code). Using a sentinel keeps the call sites at one line each.
+ */
+const FLAG_INVALID = Symbol("flag-invalid");
+
+/**
+ * Coerce any thrown value to a printable diagnostic string. `(err as Error).message`
+ * yields literal `undefined` for string/null/object rejections — and crashes
+ * on `throw undefined`. Surface the rejection regardless of its shape so the
+ * user sees something actionable instead of `undefined\n`.
+ */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (err === undefined) return "Unknown error (no message)";
+  if (err === null) return "Unknown error (null)";
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+/**
+ * Strict positive-integer parser for CLI flag values.
+ *
+ * `parseInt('5abc', 10)` returns 5 — silently accepting garbage suffixes —
+ * and `Number.isInteger` accepts non-safe-integer huge values like 1e20.
+ * Both behaviors fail the contract documented for `--limit` and `--days`.
+ * This helper rejects anything that isn't a bare run of ASCII digits parsing
+ * to a safe positive integer.
+ */
+function parsePositiveIntFlag(
+  raw: string | boolean | undefined,
+  flag: string
+): number | undefined | typeof FLAG_INVALID {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) {
+    console.error(`Error: --${flag} must be a positive integer`);
+    process.exitCode = 1;
+    return FLAG_INVALID;
+  }
+  const n = parseInt(raw, 10);
+  if (!Number.isSafeInteger(n) || n < 1) {
+    console.error(`Error: --${flag} must be a positive integer`);
+    process.exitCode = 1;
+    return FLAG_INVALID;
+  }
+  return n;
+}
+
 function isFlag(arg: string): boolean {
   if (arg.startsWith("--")) return true;
   if (arg.startsWith("-") && arg.length === 2 && /[a-zA-Z]/.test(arg[1])) return true;
@@ -220,7 +273,7 @@ async function main(): Promise<void> {
   try {
     ({ command, args, positional } = parseArgs(rawArgs));
   } catch (err) {
-    console.error((err as Error).message);
+    console.error(errorMessage(err));
     process.exitCode = 2;
     return;
   }
@@ -235,7 +288,7 @@ async function main(): Promise<void> {
   try {
     config = loadConfig();
   } catch (err) {
-    console.error((err as Error).message);
+    console.error(errorMessage(err));
     process.exitCode = 1;
     return;
   }
@@ -280,15 +333,8 @@ async function main(): Promise<void> {
         break;
 
       case "search": {
-        let limit: number | undefined;
-        if (args["limit"] !== undefined) {
-          limit = parseInt(args["limit"] as string, 10);
-          if (isNaN(limit) || limit < 1) {
-            console.error("Error: --limit must be a positive integer");
-            process.exitCode = 1;
-            return;
-          }
-        }
+        const limit = parsePositiveIntFlag(args["limit"], "limit");
+        if (limit === FLAG_INVALID) return;
         if (!positional[0] && args["like"] === undefined) {
           console.error(
             "Usage:\n" +
@@ -300,8 +346,8 @@ async function main(): Promise<void> {
         }
         await cmdSearch(config, {
           keyword: positional[0],
-          like: args["like"] as string | undefined,
-          mode: (args["mode"] as string | undefined)?.toLowerCase(),
+          like: typeof args["like"] === "string" ? args["like"] : undefined,
+          mode: typeof args["mode"] === "string" ? args["mode"].toLowerCase() : undefined,
           limit,
           all: args["all"] === true,
         });
@@ -309,15 +355,8 @@ async function main(): Promise<void> {
       }
 
       case "stale": {
-        let days: number | undefined;
-        if (args["days"] !== undefined) {
-          days = parseInt(args["days"] as string, 10);
-          if (isNaN(days) || days < 1) {
-            console.error("Error: --days must be a positive integer");
-            process.exitCode = 1;
-            return;
-          }
-        }
+        const days = parsePositiveIntFlag(args["days"], "days");
+        if (days === FLAG_INVALID) return;
         cmdStale(config, { days });
         break;
       }
@@ -387,12 +426,12 @@ async function main(): Promise<void> {
         process.exitCode = 1;
     }
   } catch (err) {
-    console.error((err as Error).message);
+    console.error(errorMessage(err));
     process.exitCode = 1;
   }
 }
 
 main().catch((err) => {
-  console.error((err as Error).message);
+  console.error(errorMessage(err));
   process.exitCode = 1;
 });

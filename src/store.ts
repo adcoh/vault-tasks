@@ -374,10 +374,12 @@ export class TaskStore {
     const query = keyword.toLowerCase();
 
     return tasks.filter((t) => {
-      return (
-        t.title.toLowerCase().includes(query) ||
-        t.body.toLowerCase().includes(query)
-      );
+      if (t.title.toLowerCase().includes(query)) return true;
+      if (t.body.toLowerCase().includes(query)) return true;
+      for (const tag of t.tags) {
+        if (tag.toLowerCase().includes(query)) return true;
+      }
+      return false;
     });
   }
 

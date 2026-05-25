@@ -14,6 +14,33 @@ const STATUS_DISPLAY: Record<string, string> = {
   "wont-do": "wont-do",
 };
 
+// Use Object.hasOwn rather than `STATUS_DISPLAY[s] ?? s`. A YAML status of
+// `constructor`, `toString`, `__proto__`, etc. resolves to an inherited
+// Function/Object via the prototype chain, which is truthy → the `??`
+// fallback never fires → `.padEnd` then throws TypeError. Hostile input from
+// a hand-edited vault would otherwise crash every list/search command.
+function displayStatus(s: string): string {
+  return Object.hasOwn(STATUS_DISPLAY, s) ? STATUS_DISPLAY[s] : s;
+}
+
+// Strip control characters before rendering untrusted task fields into a
+// table or error message. Without this, a frontmatter title containing
+// `\x1b[31m...` recolors the user's terminal; a title with `\n` or `\t`
+// forges fake rows or breaks column alignment. Apply at every interpolation
+// site for task-derived strings.
+//
+// Strategy:
+//  - Drop "hard" control bytes (\x00-\x08, \x0b, \x0c, \x0e-\x1f, \x7f-\x9f)
+//    entirely — these have no place in a CLI table and exist mainly as
+//    attack vectors (ANSI/CSI, ESC, BEL, etc.).
+//  - Convert \r, \n, \t to spaces so layout is preserved (rather than
+//    silently shortened) when content with line breaks is rendered.
+export function sanitizeForDisplay(s: string): string {
+  return s
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, "")
+    .replace(/[\r\n\t]/g, " ");
+}
+
 export function sortByPriority(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const pa = PRIORITY_ORDER[a.priority] ?? 9;
@@ -34,11 +61,11 @@ export function formatTaskTable(tasks: Task[]): string {
   const divider = "-".repeat(idWidth + 1 + 10 + 1 + 8 + 1 + 12 + 1 + 20);
 
   const rows = tasks.map((t) => {
-    const id = t.id.slice(0, idWidth).padEnd(idWidth);
-    const status = (STATUS_DISPLAY[t.status] ?? t.status).padEnd(10);
-    const pri = t.priority.slice(0, 3).padEnd(8);
-    const created = (t.created || "?").padEnd(12);
-    return `${id} ${status} ${pri} ${created} ${t.title}`;
+    const id = sanitizeForDisplay(t.id).slice(0, idWidth).padEnd(idWidth);
+    const status = displayStatus(t.status).padEnd(10);
+    const pri = sanitizeForDisplay(t.priority).slice(0, 3).padEnd(8);
+    const created = sanitizeForDisplay(t.created || "?").padEnd(12);
+    return `${id} ${status} ${pri} ${created} ${sanitizeForDisplay(t.title)}`;
   });
 
   return [header, divider, ...rows].join("\n");
@@ -56,10 +83,10 @@ export function formatStaleTable(
   const divider = "-".repeat(idWidth + 1 + 8 + 1 + 8 + 1 + 20);
 
   const rows = items.map(({ task, ageDays }) => {
-    const id = task.id.slice(0, idWidth).padEnd(idWidth);
+    const id = sanitizeForDisplay(task.id).slice(0, idWidth).padEnd(idWidth);
     const age = String(ageDays).padEnd(8);
-    const pri = task.priority.slice(0, 3).padEnd(8);
-    return `${id} ${age} ${pri} ${task.title}`;
+    const pri = sanitizeForDisplay(task.priority).slice(0, 3).padEnd(8);
+    return `${id} ${age} ${pri} ${sanitizeForDisplay(task.title)}`;
   });
 
   return [header, divider, ...rows].join("\n");
@@ -75,11 +102,11 @@ export function formatSearchHits(hits: SearchHit[]): string {
   const divider = "-".repeat(idWidth + 1 + 7 + 1 + 10 + 1 + 8 + 1 + 20);
 
   const rows = hits.map(({ task, score }) => {
-    const id = task.id.slice(0, idWidth).padEnd(idWidth);
+    const id = sanitizeForDisplay(task.id).slice(0, idWidth).padEnd(idWidth);
     const sc = score.toFixed(2).padEnd(7);
-    const status = (STATUS_DISPLAY[task.status] ?? task.status).padEnd(10);
-    const pri = task.priority.slice(0, 3).padEnd(8);
-    return `${id} ${sc} ${status} ${pri} ${task.title}`;
+    const status = displayStatus(task.status).padEnd(10);
+    const pri = sanitizeForDisplay(task.priority).slice(0, 3).padEnd(8);
+    return `${id} ${sc} ${status} ${pri} ${sanitizeForDisplay(task.title)}`;
   });
 
   return [header, divider, ...rows].join("\n");

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { sortByPriority, formatTaskTable, formatStaleTable, formatTagList, formatSearchHits } from "../output.js";
+import { sortByPriority, formatTaskTable, formatStaleTable, formatTagList, formatSearchHits, sanitizeForDisplay } from "../output.js";
 import type { Task } from "../task.js";
 import type { SearchHit } from "../search/types.js";
 
@@ -145,5 +145,54 @@ describe("formatSearchHits", () => {
     const firstIdx = lines.findIndex((l) => l.includes("First"));
     const secondIdx = lines.findIndex((l) => l.includes("Second"));
     assert.ok(firstIdx < secondIdx, "input order must be preserved");
+  });
+
+  it("does not crash when status equals a prototype-chain property name", () => {
+    // Hostile YAML: status: constructor / toString / __proto__ / hasOwnProperty.
+    // Without the Object.hasOwn guard, STATUS_DISPLAY[s] returns inherited
+    // functions/objects → .padEnd throws TypeError → every list/search crashes.
+    for (const status of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      const hit: SearchHit = { task: makeTask({ status }), score: 1, mode: "bm25" };
+      assert.doesNotThrow(() => formatSearchHits([hit]));
+    }
+  });
+
+  it("strips ANSI escape sequences from rendered titles", () => {
+    const hit: SearchHit = {
+      task: makeTask({ title: "\x1b[31mInjected\x1b[0m" }),
+      score: 1.0,
+      mode: "bm25",
+    };
+    const result = formatSearchHits([hit]);
+    assert.ok(!result.includes("\x1b"), `escape sequence must be stripped: ${JSON.stringify(result)}`);
+    assert.ok(result.includes("Injected"));
+  });
+
+  it("collapses newlines and tabs in titles into single spaces", () => {
+    const hit: SearchHit = {
+      task: makeTask({ title: "real\n0099 99.99   open      hi  FORGED ROW" }),
+      score: 1.0,
+      mode: "bm25",
+    };
+    const result = formatSearchHits([hit]);
+    // The output is header + divider + one row — no forged row.
+    const taskRows = result.split("\n").filter((l) => /^\S/.test(l)).slice(2);
+    assert.equal(taskRows.length, 1);
+    assert.ok(!result.includes("\n0099"));
+  });
+});
+
+describe("sanitizeForDisplay", () => {
+  it("strips C0 and C1 control characters", () => {
+    assert.equal(sanitizeForDisplay("\x1b[31mfoo\x1b[0m"), "[31mfoo[0m");
+    assert.equal(sanitizeForDisplay("\x00\x01\x02bar"), "bar");
+  });
+  it("collapses \\n, \\r, \\t into single spaces", () => {
+    assert.equal(sanitizeForDisplay("a\nb"), "a b");
+    assert.equal(sanitizeForDisplay("a\r\nb"), "a  b");
+    assert.equal(sanitizeForDisplay("a\tb"), "a b");
+  });
+  it("leaves normal text untouched", () => {
+    assert.equal(sanitizeForDisplay("Hello, world! 🚀"), "Hello, world! 🚀");
   });
 });

@@ -1,5 +1,5 @@
 import type { Config } from "../config.js";
-import { formatSearchHits, formatTaskTable, sortByPriority } from "../output.js";
+import { formatSearchHits, formatTaskTable, sanitizeForDisplay, sortByPriority } from "../output.js";
 import { searchTasks, similarTasks } from "../search/index.js";
 import type { SearchMode } from "../search/types.js";
 import { TaskStore } from "../store.js";
@@ -18,18 +18,29 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
   const store = new TaskStore(config);
   const includeArchived = args.all === true;
 
-  const mode = (args.mode ?? "keyword").toLowerCase();
+  const requestedMode = args.mode ?? "keyword";
+  const mode = requestedMode.toLowerCase();
   if (!VALID_MODES.has(mode)) {
     throw new Error(
-      `Invalid --mode '${args.mode}'. Use: ${[...VALID_MODES].join(", ")}.`
+      `Invalid --mode '${sanitizeForDisplay(requestedMode)}'. Use: ${[...VALID_MODES].join(", ")}.`
+    );
+  }
+
+  if (args.like !== undefined && args.keyword !== undefined) {
+    throw new Error(
+      "--like and a positional <keyword> cannot be combined. " +
+      "Use --like <id> for similarity search, or <keyword> for query search."
     );
   }
 
   if (args.like !== undefined) {
+    if (args.like === "") {
+      throw new Error("--like requires a non-empty task id.");
+    }
     if (mode === "keyword") {
       throw new Error(
-        "--like requires --mode bm25. Keyword mode does substring matching, not task similarity. " +
-        "Try: vt search --like " + args.like + " --mode bm25"
+        `--like requires --mode bm25. Keyword mode does substring matching, not task similarity. ` +
+        `Try: vt search --like '${sanitizeForDisplay(args.like)}' --mode bm25`
       );
     }
     const target = store.findIncludingArchive(args.like);
@@ -39,7 +50,7 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
       includeArchived,
     });
     if (hits.length === 0) {
-      console.log(`No tasks similar to '${target.id} ${target.title}'.`);
+      console.log(`No tasks similar to '${target.id} ${sanitizeForDisplay(target.title)}'.`);
       return;
     }
     console.log(formatSearchHits(hits));
@@ -55,14 +66,18 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
   }
 
   if (mode === "keyword") {
-    // Preserve legacy behavior exactly: substring match + priority sort.
+    // Preserve legacy CLI behavior: substring match + priority sort, no
+    // result cap unless --limit is passed. Sort first, THEN slice — slicing
+    // before the sort would silently drop high-priority matches that live in
+    // higher-numbered files.
     const matches = store.search(args.keyword, includeArchived);
     if (matches.length === 0) {
-      console.log(`No tasks matching '${args.keyword}'.`);
+      console.log(`No tasks matching '${sanitizeForDisplay(args.keyword)}'.`);
       return;
     }
-    const limited = args.limit !== undefined ? matches.slice(0, args.limit) : matches;
-    console.log(formatTaskTable(sortByPriority(limited)));
+    const sorted = sortByPriority(matches);
+    const limited = args.limit !== undefined ? sorted.slice(0, args.limit) : sorted;
+    console.log(formatTaskTable(limited));
     return;
   }
 
@@ -72,7 +87,7 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
     includeArchived,
   });
   if (hits.length === 0) {
-    console.log(`No tasks matching '${args.keyword}'.`);
+    console.log(`No tasks matching '${sanitizeForDisplay(args.keyword)}'.`);
     return;
   }
   console.log(formatSearchHits(hits));
