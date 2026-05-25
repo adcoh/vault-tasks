@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { sortByPriority, formatTaskTable, formatStaleTable, formatTagList } from "../output.js";
+import { sortByPriority, formatTaskTable, formatStaleTable, formatTagList, formatSearchHits } from "../output.js";
 import type { Task } from "../task.js";
+import type { SearchHit } from "../search/types.js";
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -117,5 +118,32 @@ describe("formatTagList", () => {
     const tags = new Map([["auth", 3]]);
     const result = formatTagList(tags);
     assert.ok(result.includes("auth (3)"));
+  });
+});
+
+describe("formatSearchHits", () => {
+  it("returns 'No matching tasks.' for empty array", () => {
+    assert.equal(formatSearchHits([]), "No matching tasks.");
+  });
+
+  it("includes a SCORE column", () => {
+    const hit: SearchHit = { task: makeTask(), score: 3.14, mode: "bm25" };
+    const result = formatSearchHits([hit]);
+    const lines = result.split("\n");
+    assert.ok(lines[0].includes("SCORE"));
+    // Score should appear rounded to 2 decimals.
+    assert.ok(lines[2].includes("3.14"), `expected formatted score in row, got: ${lines[2]}`);
+  });
+
+  it("preserves task ordering from the input array (caller-ranked)", () => {
+    // formatSearchHits is a pure formatter — ranking happens upstream.
+    const hits: SearchHit[] = [
+      { task: makeTask({ id: "0001", title: "First" }), score: 1.0, mode: "bm25" },
+      { task: makeTask({ id: "0002", title: "Second" }), score: 5.0, mode: "bm25" },
+    ];
+    const lines = formatSearchHits(hits).split("\n");
+    const firstIdx = lines.findIndex((l) => l.includes("First"));
+    const secondIdx = lines.findIndex((l) => l.includes("Second"));
+    assert.ok(firstIdx < secondIdx, "input order must be preserved");
   });
 });

@@ -310,6 +310,20 @@ export class TaskStore {
     throw new Error(`No task matching '${identifier}'`);
   }
 
+  /**
+   * Like `find()`, but returns archived tasks instead of throwing. Use only
+   * for read-only operations (search, similarity lookup) where surfacing an
+   * archived task is the correct answer rather than a guardrail violation.
+   */
+  findIncludingArchive(identifier: string): Task {
+    this.ensureBacklogDir();
+    const backlogMatch = this.matchInDir(identifier, this.config.backlogDir);
+    if (backlogMatch) return backlogMatch;
+    const archiveMatch = this.matchInDir(identifier, this.config.archiveDir);
+    if (archiveMatch) return archiveMatch;
+    throw new Error(`No task matching '${identifier}'`);
+  }
+
   setStatus(identifier: string, newStatus: string): Task {
     return this.update(identifier, { status: newStatus });
   }

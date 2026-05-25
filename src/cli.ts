@@ -22,7 +22,7 @@ Usage: vt <command> [options]
 Commands:
   new <title>           Create a new task
   list                  List tasks
-  search <keyword>      Search tasks by title and body
+  search <keyword>      Search tasks by title and body (--mode keyword|bm25, --like <id>, --limit N)
   stale                 List stale open tasks
   show <id>             Show full task
   done <id>             Mark task as done
@@ -54,6 +54,9 @@ Options (vary by command):
   --json                Machine-readable lint output
   --quiet               Print only the lint SUMMARY line
   --no-suggestions      Skip "did you mean?" suggestions in lint
+  --mode                Search mode: keyword (default) or bm25
+  --like                Find tasks similar to <id> (requires --mode bm25)
+  --limit               Maximum number of search results
   --help, -h            Show this help message
 `;
 
@@ -84,6 +87,9 @@ const VALUE_FLAGS = new Set([
   "days",
   "only",
   "scope",
+  "mode",
+  "like",
+  "limit",
 ]);
 
 const VALUE_FLAG_HINTS: Record<string, string> = {
@@ -97,6 +103,9 @@ const VALUE_FLAG_HINTS: Record<string, string> = {
   days: "a positive integer",
   only: "broken|orphans|stale|drift",
   scope: "a directory",
+  mode: "keyword or bm25",
+  like: "a task id (e.g. 0042 or 01HXY...)",
+  limit: "a positive integer",
 };
 
 function missingValueError(key: string): Error {
@@ -197,7 +206,7 @@ function parseArgs(argv: string[]): { command: string; args: Record<string, stri
   return { command, args, positional };
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
 
   if (rawArgs.length === 0 || rawArgs.includes("--help") || rawArgs.includes("-h")) {
@@ -270,17 +279,34 @@ function main(): void {
         });
         break;
 
-      case "search":
-        if (!positional[0]) {
-          console.error("Usage: vt search <keyword> [--all]");
+      case "search": {
+        let limit: number | undefined;
+        if (args["limit"] !== undefined) {
+          limit = parseInt(args["limit"] as string, 10);
+          if (isNaN(limit) || limit < 1) {
+            console.error("Error: --limit must be a positive integer");
+            process.exitCode = 1;
+            return;
+          }
+        }
+        if (!positional[0] && args["like"] === undefined) {
+          console.error(
+            "Usage:\n" +
+            "  vt search <keyword> [--all] [--mode keyword|bm25] [--limit N]\n" +
+            "  vt search --like <id> --mode bm25 [--all] [--limit N]"
+          );
           process.exitCode = 1;
           return;
         }
-        cmdSearch(config, {
+        await cmdSearch(config, {
           keyword: positional[0],
+          like: args["like"] as string | undefined,
+          mode: (args["mode"] as string | undefined)?.toLowerCase(),
+          limit,
           all: args["all"] === true,
         });
         break;
+      }
 
       case "stale": {
         let days: number | undefined;
@@ -366,4 +392,7 @@ function main(): void {
   }
 }
 
-main();
+main().catch((err) => {
+  console.error((err as Error).message);
+  process.exitCode = 1;
+});

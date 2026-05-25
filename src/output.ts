@@ -1,4 +1,5 @@
 import type { Task } from "./task.js";
+import type { SearchHit } from "./search/types.js";
 
 const PRIORITY_ORDER: Record<string, number> = {
   high: 0,
@@ -59,6 +60,26 @@ export function formatStaleTable(
     const age = String(ageDays).padEnd(8);
     const pri = task.priority.slice(0, 3).padEnd(8);
     return `${id} ${age} ${pri} ${task.title}`;
+  });
+
+  return [header, divider, ...rows].join("\n");
+}
+
+export function formatSearchHits(hits: SearchHit[]): string {
+  if (hits.length === 0) return "No matching tasks.";
+
+  const maxIdLen = Math.max(4, ...hits.map((h) => h.task.id.length));
+  const idWidth = Math.min(maxIdLen, 10);
+
+  const header = `${"ID".padEnd(idWidth)} ${"SCORE".padEnd(7)} ${"STATUS".padEnd(10)} ${"PRI".padEnd(8)} TASK`;
+  const divider = "-".repeat(idWidth + 1 + 7 + 1 + 10 + 1 + 8 + 1 + 20);
+
+  const rows = hits.map(({ task, score }) => {
+    const id = task.id.slice(0, idWidth).padEnd(idWidth);
+    const sc = score.toFixed(2).padEnd(7);
+    const status = (STATUS_DISPLAY[task.status] ?? task.status).padEnd(10);
+    const pri = task.priority.slice(0, 3).padEnd(8);
+    return `${id} ${sc} ${status} ${pri} ${task.title}`;
   });
 
   return [header, divider, ...rows].join("\n");

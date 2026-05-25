@@ -146,6 +146,92 @@ describe("CLI integration", () => {
     assert.ok(!result.stdout.includes("UI tweak"));
   });
 
+  it("search --mode bm25 ranks results by relevance with scores", () => {
+    run(["new", "Fix auth redirect bug"], dir);
+    run(["new", "Refactor database migration"], dir);
+    run(["new", "Auth callback handling"], dir);
+    const result = run(["search", "auth", "--mode", "bm25"], dir);
+    assert.equal(result.exitCode, 0);
+    // Header should include SCORE column for bm25 output.
+    assert.ok(result.stdout.includes("SCORE"), `expected SCORE column in output:\n${result.stdout}`);
+    // Both auth-containing tasks should appear; the DB migration should not.
+    assert.ok(result.stdout.includes("Fix auth redirect bug"));
+    assert.ok(result.stdout.includes("Auth callback handling"));
+    assert.ok(!result.stdout.includes("Refactor database migration"));
+  });
+
+  it("search --mode bm25 reports no matches when no token matches", () => {
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "kubernetes", "--mode", "bm25"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("No tasks matching"));
+  });
+
+  it("search --like finds similar tasks (excluding the target)", () => {
+    run(["new", "Fix auth redirect bug"], dir);
+    run(["new", "Fix auth callback handling"], dir);
+    run(["new", "Refactor database migration"], dir);
+    const result = run(["search", "--like", "1", "--mode", "bm25"], dir);
+    assert.equal(result.exitCode, 0);
+    // The target task itself must NOT appear in the output.
+    assert.ok(!result.stdout.includes("Fix auth redirect bug"),
+      `target task should be excluded:\n${result.stdout}`);
+    // A related task should appear; an unrelated one should not.
+    assert.ok(result.stdout.includes("Fix auth callback handling"));
+    assert.ok(!result.stdout.includes("Refactor database migration"));
+  });
+
+  it("search --like requires --mode bm25", () => {
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "--like", "1"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /--like requires --mode bm25/);
+  });
+
+  it("search rejects an invalid --mode value", () => {
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "auth", "--mode", "magic"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /Invalid --mode/);
+  });
+
+  it("search --limit caps the number of results", () => {
+    for (let i = 1; i <= 5; i++) {
+      run(["new", `Task ${i} auth`], dir);
+    }
+    const result = run(["search", "auth", "--mode", "bm25", "--limit", "2"], dir);
+    assert.equal(result.exitCode, 0);
+    const taskRows = result.stdout
+      .split("\n")
+      .filter((l) => /^\d{4}\s/.test(l));
+    assert.equal(taskRows.length, 2);
+  });
+
+  it("search --limit rejects non-positive values", () => {
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "auth", "--mode", "bm25", "--limit", "0"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /--limit must be a positive integer/);
+  });
+
+  it("search --like can target an archived task", () => {
+    run(["new", "Fix auth bug"], dir);
+    run(["new", "Auth refactor"], dir);
+    run(["done", "1"], dir); // 0001 is now archived
+    const result = run(["search", "--like", "1", "--mode", "bm25", "--all"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("Auth refactor"));
+  });
+
+  it("search default mode is byte-identical to the legacy substring behavior", () => {
+    run(["new", "Auth bug fix"], dir);
+    run(["new", "UI tweak"], dir);
+    // No --mode flag should produce the legacy table (no SCORE column).
+    const result = run(["search", "auth"], dir);
+    assert.equal(result.exitCode, 0);
+    assert.ok(!result.stdout.includes("SCORE"));
+  });
+
   it("done writes status to file and auto-archives", () => {
     run(["new", "Finish this"], dir);
     const result = run(["done", "1"], dir);
