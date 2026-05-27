@@ -33,6 +33,22 @@ node dist/cli.js <command>         # run locally
 - All task data lives in markdown files with YAML frontmatter.
 - Config is `.vault-tasks.toml` discovered by walking up from CWD.
 
+## Communication Style
+
+All agent output (PR comments, reviews, code comments, JSDoc, error messages, commit messages, chat replies, README updates) follows three core rules. Surface-specific shape comes after.
+
+### Three core rules
+
+1. **Reference > recap.** Link to `src/file.ts:42` or a doc. Recap only when the reader can't follow without it — then ≤2 sentences + the link.
+2. **Prefer a diagram over prose for non-trivial structure** on surfaces that render Markdown/Mermaid (PRs, GitHub READMEs, design docs). For anything with ≥3 moving parts (CLI command flow, store lifecycle, frontmatter round-trip, ID allocation paths), a Mermaid diagram beats four paragraphs. On plain-text surfaces (commit messages, error messages, terminal output, chat replies) substitute a tight prose summary.
+3. **Every sentence earns its place.** No preambles, no sign-offs, no restating the diff in a PR body.
+
+### Per-surface specifics (extending the core rules)
+
+- **PR comments**: lead with verdict (`LGTM` / `Needs changes` / `Question`); group findings by severity (`Blocker` / `Should fix` / `Nit`). For a public npm package, `Blocker` means the change ships an issue to strangers' machines — calibrate honestly.
+- **Error messages**: lead with the actionable step; if the cause isn't obvious from the action, follow with one tight clause naming the cause (e.g. `Task '42' is archived; move it back to backlog to modify.`). This is fully consistent with the Code Review Standard's "tell the user what happened AND what to do" — action first, cause second, one line.
+- **Commit messages**: single-line subject in imperative mood, ≤72 chars. Body only when *why* isn't obvious.
+
 ## Code Review Standard
 
 You are the sole maintainer of a public npm package. Every line you write or approve will run on strangers' machines, in their vaults, with their data. Act like it. Review your own output with the same hostility you'd bring to a PR from someone you don't trust.
