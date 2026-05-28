@@ -22,7 +22,7 @@ Usage: vt <command> [options]
 Commands:
   new <title>           Create a new task
   list                  List tasks
-  search <keyword>      Search tasks by title and body
+  search <keyword>      Search tasks by title and body (--mode keyword|bm25, --like <id>, --limit N)
   stale                 List stale open tasks
   show <id>             Show full task
   done <id>             Mark task as done
@@ -54,6 +54,9 @@ Options (vary by command):
   --json                Machine-readable lint output
   --quiet               Print only the lint SUMMARY line
   --no-suggestions      Skip "did you mean?" suggestions in lint
+  --mode                Search mode: keyword (default) or bm25
+  --like                Find tasks similar to <id> (requires --mode bm25)
+  --limit               Maximum number of search results
   --help, -h            Show this help message
 `;
 
@@ -84,6 +87,9 @@ const VALUE_FLAGS = new Set([
   "days",
   "only",
   "scope",
+  "mode",
+  "like",
+  "limit",
 ]);
 
 const VALUE_FLAG_HINTS: Record<string, string> = {
@@ -97,11 +103,67 @@ const VALUE_FLAG_HINTS: Record<string, string> = {
   days: "a positive integer",
   only: "broken|orphans|stale|drift",
   scope: "a directory",
+  mode: "keyword or bm25",
+  like: "a task id (e.g. 0042 or 01HXY...)",
+  limit: "a positive integer",
 };
 
 function missingValueError(key: string): Error {
   const hint = VALUE_FLAG_HINTS[key];
   return new Error(`Flag --${key} requires a value${hint ? ` (${hint})` : ""}.`);
+}
+
+/**
+ * Sentinel returned by parsePositiveIntFlag when validation fails. The caller
+ * is expected to short-circuit (the helper already wrote an error and set the
+ * exit code). Using a sentinel keeps the call sites at one line each.
+ */
+const FLAG_INVALID = Symbol("flag-invalid");
+
+/**
+ * Coerce any thrown value to a printable diagnostic string. `(err as Error).message`
+ * yields literal `undefined` for string/null/object rejections — and crashes
+ * on `throw undefined`. Surface the rejection regardless of its shape so the
+ * user sees something actionable instead of `undefined\n`.
+ */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  if (err === undefined) return "Unknown error (no message)";
+  if (err === null) return "Unknown error (null)";
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+/**
+ * Strict positive-integer parser for CLI flag values.
+ *
+ * `parseInt('5abc', 10)` returns 5 — silently accepting garbage suffixes —
+ * and `Number.isInteger` accepts non-safe-integer huge values like 1e20.
+ * Both behaviors fail the contract documented for `--limit` and `--days`.
+ * This helper rejects anything that isn't a bare run of ASCII digits parsing
+ * to a safe positive integer.
+ */
+function parsePositiveIntFlag(
+  raw: string | boolean | undefined,
+  flag: string
+): number | undefined | typeof FLAG_INVALID {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || !/^\d+$/.test(raw)) {
+    console.error(`Error: --${flag} must be a positive integer`);
+    process.exitCode = 1;
+    return FLAG_INVALID;
+  }
+  const n = parseInt(raw, 10);
+  if (!Number.isSafeInteger(n) || n < 1) {
+    console.error(`Error: --${flag} must be a positive integer`);
+    process.exitCode = 1;
+    return FLAG_INVALID;
+  }
+  return n;
 }
 
 function isFlag(arg: string): boolean {
@@ -197,7 +259,7 @@ function parseArgs(argv: string[]): { command: string; args: Record<string, stri
   return { command, args, positional };
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
 
   if (rawArgs.length === 0 || rawArgs.includes("--help") || rawArgs.includes("-h")) {
@@ -211,7 +273,7 @@ function main(): void {
   try {
     ({ command, args, positional } = parseArgs(rawArgs));
   } catch (err) {
-    console.error((err as Error).message);
+    console.error(errorMessage(err));
     process.exitCode = 2;
     return;
   }
@@ -226,7 +288,7 @@ function main(): void {
   try {
     config = loadConfig();
   } catch (err) {
-    console.error((err as Error).message);
+    console.error(errorMessage(err));
     process.exitCode = 1;
     return;
   }
@@ -270,28 +332,31 @@ function main(): void {
         });
         break;
 
-      case "search":
-        if (!positional[0]) {
-          console.error("Usage: vt search <keyword> [--all]");
+      case "search": {
+        const limit = parsePositiveIntFlag(args["limit"], "limit");
+        if (limit === FLAG_INVALID) return;
+        if (!positional[0] && args["like"] === undefined) {
+          console.error(
+            "Usage:\n" +
+            "  vt search <keyword> [--all] [--mode keyword|bm25] [--limit N]\n" +
+            "  vt search --like <id> --mode bm25 [--all] [--limit N]"
+          );
           process.exitCode = 1;
           return;
         }
-        cmdSearch(config, {
+        await cmdSearch(config, {
           keyword: positional[0],
+          like: typeof args["like"] === "string" ? args["like"] : undefined,
+          mode: typeof args["mode"] === "string" ? args["mode"].toLowerCase() : undefined,
+          limit,
           all: args["all"] === true,
         });
         break;
+      }
 
       case "stale": {
-        let days: number | undefined;
-        if (args["days"] !== undefined) {
-          days = parseInt(args["days"] as string, 10);
-          if (isNaN(days) || days < 1) {
-            console.error("Error: --days must be a positive integer");
-            process.exitCode = 1;
-            return;
-          }
-        }
+        const days = parsePositiveIntFlag(args["days"], "days");
+        if (days === FLAG_INVALID) return;
         cmdStale(config, { days });
         break;
       }
@@ -361,9 +426,12 @@ function main(): void {
         process.exitCode = 1;
     }
   } catch (err) {
-    console.error((err as Error).message);
+    console.error(errorMessage(err));
     process.exitCode = 1;
   }
 }
 
-main();
+main().catch((err) => {
+  console.error(errorMessage(err));
+  process.exitCode = 1;
+});

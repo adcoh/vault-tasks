@@ -57,7 +57,7 @@ vt done 1
 |---|---|
 | `vt new <title>` | Create a task. Options: `--priority`, `--tags`, `--source`, `--commit` |
 | `vt list` | List open tasks. Options: `--status`, `--priority`, `--tag`, `--all` |
-| `vt search <keyword>` | Search titles and body text. `--all` includes archived |
+| `vt search <keyword>` | Search titles and body text. `--all` includes archived. `--mode bm25` ranks by relevance; `--like <id>` finds similar tasks; `--limit N` caps results |
 | `vt show <id>` | Print full task file |
 | `vt start <id>` | Set status to `in-progress` |
 | `vt done <id>` | Set status to `done` (auto-archives) |
@@ -186,7 +186,35 @@ store.archiveCompleted();
   `collectWikilinks`, `findBrokenLinks`, `findOrphanEvergreens`,
   `findStaleReferences`, `findEvergreenDrift`, `attachSuggestions`
 - Types: `Task`, `CreateTaskOpts`, `Config`, `LintReport`, `LintOptions`,
-  `WikiLink`, `VaultFile`, `BrokenEntry`, `Suggestion`
+  `WikiLink`, `VaultFile`, `BrokenEntry`, `Suggestion`, `SearchHit`,
+  `SearchMode`, `SearchOptions`
+
+### Ranked search (`vault-tasks/search`)
+
+A separate, zero-dependency subpath export provides BM25-ranked search and
+task-to-task similarity. Imported only when needed -- the core `vault-tasks`
+entry point is unaffected.
+
+```typescript
+import { TaskStore, loadConfig } from "vault-tasks";
+import { searchTasks, similarTasks, BM25Index, tokenize } from "vault-tasks/search";
+
+const store = new TaskStore(loadConfig());
+
+// Free-text query, ranked by BM25
+const hits = await searchTasks(store, "auth callback", { mode: "bm25", limit: 10 });
+
+// Tasks similar to a given task (by title + tags)
+const target = store.findIncludingArchive("0042");
+const related = await similarTasks(store, target, { mode: "bm25" });
+```
+
+Available modes: `keyword` (substring matching across title, body, AND tags;
+priority-sorted; the default for both the CLI and `searchTasks`) and `bm25`
+(ranked by BM25 score; title-weighted document construction). Semantic and
+hybrid modes are planned and will require an optional embedder peer
+dependency; until then they are deliberately excluded from the `SearchMode`
+type so accidental use is a compile-time error rather than a runtime crash.
 
 ## License
 

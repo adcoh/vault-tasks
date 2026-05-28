@@ -206,6 +206,23 @@ describe("TaskStore", () => {
     assert.throws(() => store.find("1"), /archived/i);
   });
 
+  it("findIncludingArchive returns archived tasks without throwing", () => {
+    store.create({ title: "Active task" });
+    const archived = store.create({ title: "To archive" });
+    store.setStatus("2", "done");
+    const t = store.findIncludingArchive("2");
+    assert.equal(t.title, "To archive");
+    assert.ok(t.filePath.includes("archive"));
+    // Backlog matches still take precedence over archive matches.
+    const active = store.findIncludingArchive("1");
+    assert.equal(active.title, "Active task");
+    assert.ok(!active.filePath.includes("archive"));
+  });
+
+  it("findIncludingArchive throws when nothing matches", () => {
+    assert.throws(() => store.findIncludingArchive("9999"), /No task matching/);
+  });
+
   it("update with status=done auto-archives", () => {
     store.create({ title: "Update archive" });
     const task = store.update("1", { status: "done" });

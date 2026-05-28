@@ -39,3 +39,5 @@ export type {
   DriftEntry,
   CheckName,
 } from "./lint/types.js";
+
+export type { SearchHit, SearchMode, SearchOptions } from "./search/types.js";
