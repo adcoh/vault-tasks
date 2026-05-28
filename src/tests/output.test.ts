@@ -180,6 +180,20 @@ describe("formatSearchHits", () => {
     assert.equal(taskRows.length, 1);
     assert.ok(!result.includes("\n0099"));
   });
+
+  it("sanitizes unknown statuses so they cannot forge rows via the status column", () => {
+    // status falls through to the raw-string branch of displayStatus; without
+    // sanitization, the embedded newline would render as an extra table row.
+    const hit: SearchHit = {
+      task: makeTask({ status: "open\n0099 99.99   open      hi  FORGED" }),
+      score: 1.0,
+      mode: "bm25",
+    };
+    const result = formatSearchHits([hit]);
+    const taskRows = result.split("\n").filter((l) => /^\S/.test(l)).slice(2);
+    assert.equal(taskRows.length, 1, `forged row leaked via status column:\n${result}`);
+    assert.ok(!result.includes("\n0099"));
+  });
 });
 
 describe("sanitizeForDisplay", () => {

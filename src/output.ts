@@ -19,8 +19,11 @@ const STATUS_DISPLAY: Record<string, string> = {
 // Function/Object via the prototype chain, which is truthy → the `??`
 // fallback never fires → `.padEnd` then throws TypeError. Hostile input from
 // a hand-edited vault would otherwise crash every list/search command.
+// The fallback branch ALSO sanitizes — an unknown status like
+// `"open\n0099 ..."` would otherwise inject a forged row via the status
+// column, sidestepping the per-title sanitization at the row-render site.
 function displayStatus(s: string): string {
-  return Object.hasOwn(STATUS_DISPLAY, s) ? STATUS_DISPLAY[s] : s;
+  return Object.hasOwn(STATUS_DISPLAY, s) ? STATUS_DISPLAY[s] : sanitizeForDisplay(s);
 }
 
 // Strip control characters before rendering untrusted task fields into a
