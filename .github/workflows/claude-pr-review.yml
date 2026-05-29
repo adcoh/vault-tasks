@@ -1,0 +1,112 @@
+name: Claude PR Review (autonomous, sticky)
+
+# Autonomous PR review on Adam's Claude Code Max subscription via the
+# official anthropics/claude-code-action@v1 in autonomous mode (prompt:
+# → the action acts as Claude itself, no @claude mention required).
+#
+# Pattern proven on adcoh/sayag PR #46 — see commit history there for
+# the iteration trail. Notes:
+# - Claude's GitHub App filters mentions from bot accounts; that's why
+#   we don't try to post @claude tags ourselves (would never trigger).
+# - The action self-skips on PRs that modify this workflow file unless
+#   the file's content already matches the default branch. First-PR
+#   smoke test will show "Action skipped due to workflow validation
+#   error" — expected, the workflow begins working once merged.
+# - Quota: autonomous reviews share Adam's Claude Code subscription
+#   quota with interactive sessions. Mitigations: cheap-gate skips
+#   before invoking Claude, concurrency cancels stale runs,
+#   --max-turns 8 caps the agent, sticky comment avoids per-push spam.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    if: >
+      !github.event.pull_request.draft &&
+      !startsWith(github.event.pull_request.title, 'audit: daily review') &&
+      github.event.pull_request.user.type != 'Bot'
+    permissions:
+      pull-requests: read
+      contents: read
+    outputs:
+      should_review: ${{ steps.check.outputs.should_review }}
+    steps:
+      - name: Skip rules
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          case "$PR_AUTHOR" in
+            *-bot|app/*|github-actions|dependabot\[bot\])
+              echo "should_review=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Skip — bot-pattern author: $PR_AUTHOR"
+              exit 0
+              ;;
+          esac
+          FILES=$(gh pr diff "$PR_NUMBER" --repo "$REPO" --name-only 2>/dev/null || true)
+          if [[ -n "$FILES" ]]; then
+            NON_DOCS=$(
+              printf '%s\n' "$FILES" |
+              grep -vE '\.(md|txt|rst|mdx)$|(^|/)docs/|(^|/)README|(^|/)LICENSE|(^|/)CHANGELOG|(^|/)CONTRIBUTING' \
+              || true
+            )
+            if [[ -z "$NON_DOCS" ]]; then
+              echo "should_review=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Skip — docs-only ($(wc -l <<<"$FILES" | tr -d ' ') files)"
+              exit 0
+            fi
+          fi
+          echo "should_review=true" >> "$GITHUB_OUTPUT"
+
+  review:
+    needs: gate
+    if: needs.gate.outputs.should_review == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run Claude review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          use_sticky_comment: true
+          claude_args: "--max-turns 8"
+          prompt: |
+            Review this PR following the reviewer house style.
+
+            Lead with a verdict line: `LGTM` / `Needs changes` / `Question`.
+
+            Group findings:
+            - **Blocker** — would actively cause harm or break a guarantee
+            - **Should fix** — design / pattern / readability with a concrete failure mode
+            - **Nit** — preference / polish
+
+            Format rules:
+            - **Reference > recap.** Link to `file:line`, don't paraphrase.
+            - **Diagram before prose** for ≥3 moving parts (Mermaid renders in PR comments).
+            - **Every sentence earns its place.** No preambles, no closing sign-offs, no restating the diff.
+            - Confidence tag per bullet: `(conf: low|med|high)`. Calibrate honestly — most useful when not always `high`.
+
+            Begin the comment with `<!-- hermes-reviewer:v1 -->` on line 1 so downstream tooling can identify Hermes-style reviews.
+
+            If you find nothing actionable, post `LGTM` and one line of rationale.
