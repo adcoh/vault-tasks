@@ -2,6 +2,74 @@
 
 All notable changes to this project will be documented here.
 
+## 0.5.0
+
+### Added
+
+- **Optional BM25 ranked search.** New `vault-tasks/search` subpath export
+  ships a zero-dependency, in-memory BM25 index alongside a Unicode-aware
+  tokenizer (`tokenize`, `BM25Index`, `searchTasks`, `similarTasks`). The
+  main `vault-tasks` import is unchanged — the BM25 code is parse-cost-free
+  unless you reach for it.
+- **`vt search --mode bm25`.** Ranks results by BM25 score across title
+  (weighted), tags, and body. Falls back to legacy substring matching when
+  `--mode` is omitted, so the default behavior is byte-identical to 0.4.x.
+- **`vt search --like <id>`.** Finds tasks similar to a given task (works
+  on archived tasks via the new read-only `TaskStore.findIncludingArchive`).
+  Requires `--mode bm25`.
+- **`vt search --limit N`.** Caps the result set across both keyword and
+  bm25 modes. In keyword mode the cap is applied *after* the priority sort,
+  so the highest-priority matches are always preserved.
+- **`store.search()` now matches tags** as well as title and body, so the
+  CLI's keyword scope agrees with the BM25 mode's scope. ([#15](https://github.com/adcoh/vault-tasks/pull/15))
+
+### Fixed
+
+- **Prototype-chain crash on hand-edited statuses.** A task with
+  `status: constructor` (or `toString`, `__proto__`, `hasOwnProperty`)
+  previously crashed every `vt list` / `vt search` with a `TypeError`
+  because the `STATUS_DISPLAY` lookup fell through to an inherited
+  prototype function. The lookup now uses `Object.hasOwn` and the fallback
+  routes through display sanitization.
+- **ANSI / control-character / newline injection via task fields.** A
+  malicious title (e.g. `\x1b[31mPWNED\x1b[0m` or `real\n0099 ... FORGED`)
+  used to recolor terminals or forge fake table rows. All task-field
+  interpolations in `formatTaskTable`, `formatStaleTable`,
+  `formatSearchHits`, and CLI error messages now strip C0/C1 control bytes
+  and collapse `\r\n\t` to spaces.
+- **Strict numeric validation for `--limit` and `--days`.** `parseInt`
+  silently accepted trailing garbage (`5abc` → 5), fractional values
+  (`2.5` → 2), and overflow (`99999999999999999999`). The new
+  `parsePositiveIntFlag` requires a bare positive `Number.isSafeInteger`.
+  The library `resolveLimit` is aligned via the same predicate.
+- **`main().catch` no longer prints literal `undefined`.** Non-Error
+  rejections (`throw 'string'`, `Promise.reject()`, plain-object throws)
+  now surface a coerced diagnostic via a typed `errorMessage(err)` helper.
+- **Unbounded memory on hostile task bodies.** A multi-megabyte task body
+  could OOM every `vt search` invocation because the BM25 index was
+  rebuilt per call with no document-size cap. The constructor now caps
+  each document at 2 MB of source text and 100 k tokens. A 3 MB body
+  indexes cleanly under a 512 MB Node heap.
+- **Keyword-mode `--limit` no longer drops high-priority matches.** The
+  CLI used to slice in filename order before sorting by priority, silently
+  excluding higher-priority matches in later files. Sort-then-slice is
+  now the order in both the CLI command and the library API.
+- **Library / CLI default-mode alignment.** Both surfaces default to
+  `keyword` mode; the library keyword path now priority-sorts and
+  matches tags, mirroring the CLI exactly.
+- **`SearchMode` type narrowed to `'keyword' | 'bm25'`.** The earlier
+  `'semantic' | 'hybrid'` members were not implemented and threw at
+  runtime; they now fail at compile time. An `assertExhaustive(x: never)`
+  guards future mode additions.
+- **Silent `--like` + positional discard.** `vt search auth --like 0042
+  --mode bm25` previously dropped `auth` without warning. The combination
+  is now rejected with an actionable error; empty `--like` values are
+  also rejected up front.
+- **Dead BM25 guards removed.** The unreachable `if (idf <= 0)` and
+  `if (score > 0)` branches (the smoothed IDF is strictly positive) used
+  to mask the contract; they would have silently dropped valid contributions
+  if a future maintainer reverted to an unsmoothed formula.
+
 ## 0.4.0
 
 ### Added
