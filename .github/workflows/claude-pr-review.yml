@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$PR_AUTHOR" in
-            *-bot|app/*|github-actions|dependabot\[bot\])
+            *-bot|*\[bot\]|github-actions)
               echo "should_review=false" >> "$GITHUB_OUTPUT"
               echo "::notice::Skip — bot-pattern author: $PR_AUTHOR"
               exit 0
@@ -82,11 +82,12 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # pinned to v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Run Claude review
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@537ffff2eff706bd7e3e1c3daf2d4b39067a9f85  # pinned to v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: true
