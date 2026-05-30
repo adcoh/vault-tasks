@@ -52,9 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      id-token: write  # required for npm Trusted Publishing (OIDC) and provenance
     steps:
       - uses: actions/setup-node@v6
         with:
@@ -66,6 +64,11 @@ jobs:
         with:
           name: package-tarball
 
+      # Trusted Publishing: no NPM_TOKEN. The npm registry trusts this exact
+      # workflow on this repo (configure under Package settings → Trusted
+      # Publishers on npmjs.com). Authentication uses the same OIDC token
+      # GitHub already issues for provenance, so the publisher identity and
+      # the build provenance are signed by the same trust chain.
       - name: Publish with provenance
         run: npm publish vault-tasks-*.tgz --provenance --access public
 
