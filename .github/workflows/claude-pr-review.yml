@@ -15,7 +15,7 @@ name: Claude PR Review (autonomous, sticky)
 # - Quota: autonomous reviews share Adam's Claude Code subscription
 #   quota with interactive sessions. Mitigations: cheap-gate skips
 #   before invoking Claude, concurrency cancels stale runs,
-#   --max-turns 8 caps the agent, sticky comment avoids per-push spam.
+#   --max-turns 25 caps the agent, sticky comment avoids per-push spam.
 
 on:
   pull_request:
@@ -91,7 +91,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: true
-          claude_args: "--max-turns 8"
+          claude_args: "--max-turns 25"
           prompt: |
             Review this PR following the reviewer house style.
 
