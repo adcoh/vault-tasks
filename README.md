@@ -1,8 +1,19 @@
 # vault-tasks
 
-Markdown-file task manager for solo devs building with [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+**A backlog your AI agent can _operate_ — not just read.**
 
-Tasks are plain markdown files with YAML frontmatter. They live in your repo (or Obsidian vault), are version-controlled with git, and are readable by humans and LLMs alike. Zero runtime dependencies.
+`vault-tasks` (`vt`) is a Markdown-file task manager for solo devs building with AI agents — [Claude Code](https://docs.anthropic.com/en/docs/claude-code), Codex, Cursor, Hermes, anything that runs a shell. Tasks are plain Markdown with YAML frontmatter: they live in your repo or Obsidian vault, version-control with git, and read cleanly to humans and LLMs alike. No database, no API key, no MCP server, no cloud. Zero runtime dependencies.
+
+Your agent runs `vt new`, `vt list`, `vt lint` directly — so "triage my backlog" actually *does* something.
+
+Every feature here exists because I hit a wall using it on real work and filed an issue against this repo. The issue tracker is a changelog of my own mistakes — go read it. — *Adam*
+
+## Build in public
+
+Dogfooded across real projects (400+ tasks tracked, ~190 closed); every release written by use, not a spec.
+
+- **The story:** _"I didn't build the Agent-Ready Vault Kit. My agent did."_ — article _(coming)_
+- **Done-for-you setup:** the **[Agent-Ready Vault Kit](https://agentvaultkit.gumroad.com/l/iueeo)** wraps `vt` + an opinionated Obsidian vault (PARA + zettelkasten, agent-neutral `.agent/` substrate, agent skills, a Hermes profile starter) into a $19 one-time starter. `vt` stays free and MIT — the Kit is just the curated setup. _(launching soon)_
 
 ## Install
 
