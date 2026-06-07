@@ -44,7 +44,7 @@ jobs:
         with:
           name: package-tarball
           path: vault-tasks-*.tgz
-          retention-days: 1
+          retention-days: 7
 
   publish-npm:
     if: github.event_name == 'release'
