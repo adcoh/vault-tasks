@@ -48,6 +48,13 @@ function makeConfig(vaultRoot: string): Config {
       },
       suggestionThreshold: 0.6,
     },
+    search: {
+      embeddingProvider: "ollama",
+      embeddingModel: "nomic-embed-text",
+      embeddingDimensions: null,
+      embeddingEndpoint: "",
+      embeddingApiKeyEnv: "",
+    },
   };
 }
 

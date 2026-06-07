@@ -195,6 +195,34 @@ describe("CLI integration", () => {
     assert.match(result.stderr, /Invalid --mode/);
   });
 
+  it("search --mode semantic is a valid mode (fails on the engine, not validation)", () => {
+    run(["new", "Fix auth bug"], dir);
+    // No local Ollama in the test environment: semantic must be accepted as a
+    // mode and then fail with an actionable engine error, not a mode error.
+    const result = run(["search", "auth", "--mode", "semantic"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.doesNotMatch(result.stderr, /Invalid --mode/);
+    assert.match(result.stderr, /Ollama not reachable|embedding/i);
+  });
+
+  it("search --mode hybrid is accepted and errors actionably when offline", () => {
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "auth", "--mode", "hybrid"], dir);
+    assert.equal(result.exitCode, 1);
+    assert.doesNotMatch(result.stderr, /Invalid --mode/);
+    assert.match(result.stderr, /Ollama not reachable|embedding/i);
+  });
+
+  it("search --like --mode semantic is permitted (no keyword-only rejection)", () => {
+    run(["new", "Fix auth bug"], dir);
+    run(["new", "Auth refactor"], dir);
+    const result = run(["search", "--like", "1", "--mode", "semantic"], dir);
+    // Permitted past the --like guard, then fails on the unreachable engine.
+    assert.equal(result.exitCode, 1);
+    assert.doesNotMatch(result.stderr, /--like requires/);
+    assert.match(result.stderr, /Ollama not reachable|embedding/i);
+  });
+
   it("search --limit caps the number of results", () => {
     for (let i = 1; i <= 5; i++) {
       run(["new", `Task ${i} auth`], dir);

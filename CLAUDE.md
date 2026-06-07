@@ -29,7 +29,7 @@ node dist/cli.js <command>         # run locally
 
 ## Conventions
 
-- Zero runtime dependencies. Only stdlib.
+- Zero *required* runtime dependencies. Only stdlib (+ global `fetch` for the embedding HTTP transports). The **one sanctioned exception** is the opt-in in-process embedding engine (`@huggingface/transformers`), declared in `optionalDependencies` and loaded via a dynamic `import()` **only** when `[search] embedding_provider = "transformers"`. It is never imported on any other path, so a default install pulls nothing. Do not add any other runtime dependency.
 - All task data lives in markdown files with YAML frontmatter.
 - Config is `.vault-tasks.toml` discovered by walking up from CWD.
 

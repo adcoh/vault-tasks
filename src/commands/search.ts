@@ -4,7 +4,7 @@ import { searchTasks, similarTasks } from "../search/index.js";
 import type { SearchMode } from "../search/types.js";
 import { TaskStore } from "../store.js";
 
-const VALID_MODES: ReadonlySet<string> = new Set(["keyword", "bm25"]);
+const VALID_MODES: ReadonlySet<string> = new Set(["keyword", "bm25", "semantic", "hybrid"]);
 
 export interface SearchArgs {
   keyword?: string;
@@ -39,7 +39,8 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
     }
     if (mode === "keyword") {
       throw new Error(
-        `--like requires --mode bm25. Keyword mode does substring matching, not task similarity. ` +
+        `--like requires --mode bm25, semantic, or hybrid. Keyword mode does substring ` +
+        `matching, not task similarity. ` +
         `Try: vt search --like '${sanitizeForDisplay(args.like)}' --mode bm25`
       );
     }
@@ -60,8 +61,8 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
   if (!args.keyword) {
     throw new Error(
       "Usage:\n" +
-      "  vt search <keyword> [--all] [--mode keyword|bm25] [--limit N]\n" +
-      "  vt search --like <id> --mode bm25 [--all] [--limit N]"
+      "  vt search <keyword> [--all] [--mode keyword|bm25|semantic|hybrid] [--limit N]\n" +
+      "  vt search --like <id> --mode bm25|semantic|hybrid [--all] [--limit N]"
     );
   }
 

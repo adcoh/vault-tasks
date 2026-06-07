@@ -187,4 +187,56 @@ describe("loadConfig", () => {
     writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\nevergreen_dir = "../../etc"');
     assert.throws(() => loadConfig(dir), /evergreen_dir must be inside the vault root/);
   });
+
+  it("returns local-first search defaults when no [search] section is present", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    const config = loadConfig(dir);
+    assert.equal(config.search.embeddingProvider, "ollama");
+    assert.equal(config.search.embeddingModel, "nomic-embed-text");
+    assert.equal(config.search.embeddingDimensions, null);
+    assert.equal(config.search.embeddingEndpoint, "");
+    assert.equal(config.search.embeddingApiKeyEnv, "");
+  });
+
+  it("parses a custom [search] section", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[search]\nembedding_provider = "openai"\nembedding_model = "text-embedding-3-small"\n' +
+        'embedding_dimensions = 1536\nembedding_api_key_env = "OPENAI_API_KEY"\n'
+    );
+    const config = loadConfig(dir);
+    assert.equal(config.search.embeddingProvider, "openai");
+    assert.equal(config.search.embeddingModel, "text-embedding-3-small");
+    assert.equal(config.search.embeddingDimensions, 1536);
+    assert.equal(config.search.embeddingApiKeyEnv, "OPENAI_API_KEY");
+  });
+
+  it("strips a trailing slash from embedding_endpoint", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[search]\nembedding_endpoint = "http://localhost:1234/"\n'
+    );
+    const config = loadConfig(dir);
+    assert.equal(config.search.embeddingEndpoint, "http://localhost:1234");
+  });
+
+  it("rejects an unknown embedding_provider with an actionable error", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    writeFileSync(join(dir, ".vault-tasks.toml"), '[search]\nembedding_provider = "magic-ai"\n');
+    assert.throws(() => loadConfig(dir), /Invalid \[search\] embedding_provider/);
+  });
+
+  it("rejects a non-positive embedding_dimensions", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    writeFileSync(join(dir, ".vault-tasks.toml"), "[search]\nembedding_dimensions = 0\n");
+    assert.throws(() => loadConfig(dir), /embedding_dimensions/);
+  });
+
+  it("rejects an empty embedding_model", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    writeFileSync(join(dir, ".vault-tasks.toml"), '[search]\nembedding_model = ""\n');
+    assert.throws(() => loadConfig(dir), /embedding_model/);
+  });
 });
