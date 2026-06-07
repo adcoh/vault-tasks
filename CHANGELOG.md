@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented here.
 
+## 0.5.1
+
+### Fixed (CI / release plumbing only — no user-facing code changes)
+
+- **npm publish via Trusted Publishing.** v0.5.0 was published successfully
+  to PyPI but never made it to npm: the legacy `NPM_TOKEN`-based publish job
+  hit `npm error 404 - PUT https://registry.npmjs.org/vault-tasks` (npm's
+  catch-all for invalid bearer auth on writes). The publish workflow now
+  drops `NODE_AUTH_TOKEN` and uses npm Trusted Publishing — the same
+  OIDC token GitHub already mints for provenance also authenticates the
+  publisher, mirroring the PyPI Trusted Publishing path. No more
+  long-lived secret to rotate. ([#18](https://github.com/adcoh/vault-tasks/pull/18))
+- **Build artifact retention bumped 1 → 7 days.** Recovering from a
+  failed publish via "Re-run failed jobs" >24 hours later used to fail
+  on artifact download because the build's tarball had expired. Seven
+  days gives a reasonable recovery window without bloating storage.
+
+### Notes
+
+- 0.5.1 is functionally identical to 0.5.0 for library and CLI users. The
+  npm `latest` tag will jump 0.4.0 → 0.5.1 (the 0.5.0 entry was never
+  published there). PyPI users see 0.4.0 → 0.5.0 → 0.5.1.
+
 ## 0.5.0
 
 ### Added
