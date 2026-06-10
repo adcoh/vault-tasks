@@ -61,7 +61,7 @@ Node 22 was still on npm 10.x. **Pre-11.5.1, the CLI signs provenance via OIDC b
 does NOT authenticate the publish via OIDC.** So you see this in the log and assume
 success is imminent:
 
-```
+```text
 npm notice publish Signed provenance statement ...
 npm notice publish Provenance statement published to transparency log: ...
 ```
