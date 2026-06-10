@@ -109,4 +109,4 @@ that version by hand.
 - [[2026-06-10 0245 BM25 Search Module and npm Trusted-Publishing Saga]] — the
   session build log with the full failure chain
 - PyPI Trusted Publishing follows the same OIDC model and was already working in the
-  same `publish.yml` — useful as a known-good reference when debugging the npm side
+  same `publish.yml` — useful as a known-good reference when debugging the npm side.
