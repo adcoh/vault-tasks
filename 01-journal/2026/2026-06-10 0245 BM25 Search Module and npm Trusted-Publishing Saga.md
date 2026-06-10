@@ -54,6 +54,19 @@ release pipeline.
 This is the valuable part — the release took **four PRs and three failed publish
 attempts** because each fix revealed the next layer.
 
+```mermaid
+flowchart TD
+    A[v0.5.0 release] --> B{publish-npm}
+    B -->|404: NPM_TOKEN missing/expired| C["#18: drop token,<br/>use Trusted Publishing"]
+    C --> D[re-run v0.5.0 job]
+    D -->|"still 404: re-run uses<br/>tagged-commit YAML, not main"| E["#22: cut fresh v0.5.1<br/>+ artifact retention 1 to 7d"]
+    E --> F[re-run v0.5.1 job]
+    F -->|artifact expired after 50h| G[v0.5.1 release]
+    G -->|"404 again: npm 10.x signs<br/>provenance but no OIDC auth"| H["#24: install npm@^11.5.1"]
+    H --> I["local publish 0.5.1:<br/>--provenance fails (CI-only)"]
+    I --> J([publish without provenance<br/>→ 0.5.1 LIVE on npm])
+```
+
 1. **v0.5.0 npm publish failed: `404 PUT /vault-tasks`.** Misleading — npm returns
    404, not 401, for unauthenticated writes. Root cause: the `NPM_TOKEN` secret was
    missing/expired. PyPI published fine (independent Trusted Publishing). *Fixed in

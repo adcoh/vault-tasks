@@ -18,6 +18,31 @@ This note exists because getting it working end-to-end on [[vault-tasks]] took
 three failed publish attempts, each with the same misleading error and a
 different root cause.
 
+```mermaid
+sequenceDiagram
+    participant GHA as GitHub Actions job
+    participant OIDC as GitHub OIDC provider
+    participant CLI as npm CLI (>=11.5.1)
+    participant Reg as npm registry
+    participant Log as Sigstore transparency log
+
+    Note over GHA,CLI: job needs id-token: write
+    GHA->>CLI: npm publish --provenance
+    CLI->>OIDC: request id-token
+    OIDC-->>CLI: signed OIDC JWT
+    CLI->>Log: sign + publish provenance statement
+    Note right of CLI: succeeds even if auth later fails
+    CLI->>Reg: exchange OIDC token for publish creds
+    Note right of Reg: matches Trusted Publisher<br/>(repo + workflow filename)?
+    alt CLI < 11.5.1 OR no trust config OR no token
+        Reg-->>CLI: 404 PUT (unauthenticated write)
+    else all three preconditions hold
+        Reg-->>CLI: short-lived scoped publish token
+        CLI->>Reg: PUT package (authenticated)
+        Reg-->>CLI: 200 OK
+    end
+```
+
 ## The three preconditions
 
 All three must hold or the publish fails:
