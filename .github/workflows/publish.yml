@@ -59,6 +59,15 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      # Trusted publisher auto-detection requires npm CLI >= 11.5.1 (released
+      # Aug 2025). Node 22 still ships npm 10.x by default, which signs
+      # provenance via OIDC but does NOT auto-authenticate via OIDC for the
+      # publish itself — producing a misleading `404 PUT /vault-tasks` from
+      # the registry's catch-all unauthenticated-write path. Bump to the
+      # latest npm before publishing.
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install -g npm@latest
+
       - name: Download artifact
         uses: actions/download-artifact@v8
         with:
