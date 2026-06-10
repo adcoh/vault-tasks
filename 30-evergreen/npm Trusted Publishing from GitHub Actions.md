@@ -51,8 +51,11 @@ All three must hold or the publish fails:
    Publishers → add the org/user, repo, and **workflow filename** (e.g.
    `publish.yml`), environment left blank if the job doesn't use one.
 2. **`id-token: write` permission** on the publishing job (mints the OIDC token).
-3. **npm CLI ≥ 11.5.1** — the version where trusted-publisher *auto-detection for
-   authentication* landed (GA 2025-07-31). This is the easy one to miss.
+3. **npm CLI ≥ 11.5.1** — the recommended minimum for trusted-publisher
+   *auto-detection of OIDC authentication* (the flow reached general
+   availability on 2025-07-31; the capability first shipped slightly earlier in
+   the 11.5.x line). Older CLIs sign provenance but do NOT auto-authenticate the
+   publish. This is the easy precondition to miss.
 
 ## The npm-CLI-version trap
 
