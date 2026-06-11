@@ -1,5 +1,10 @@
 import type { Config } from "../config.js";
-import { formatSearchHits, formatTaskTable, sanitizeForDisplay, sortByPriority } from "../output.js";
+import {
+  formatSearchHits,
+  formatTaskTable,
+  sanitizeForDisplay,
+  sortByPriority,
+} from "../output.js";
 import { searchTasks, similarTasks } from "../search/index.js";
 import type { SearchMode } from "../search/types.js";
 import { TaskStore } from "../store.js";
@@ -29,7 +34,7 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
   if (args.like !== undefined && args.keyword !== undefined) {
     throw new Error(
       "--like and a positional <keyword> cannot be combined. " +
-      "Use --like <id> for similarity search, or <keyword> for query search."
+        "Use --like <id> for similarity search, or <keyword> for query search."
     );
   }
 
@@ -40,8 +45,8 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
     if (mode === "keyword") {
       throw new Error(
         `--like requires --mode bm25, semantic, or hybrid. Keyword mode does substring ` +
-        `matching, not task similarity. ` +
-        `Try: vt search --like '${sanitizeForDisplay(args.like)}' --mode bm25`
+          `matching, not task similarity. ` +
+          `Try: vt search --like '${sanitizeForDisplay(args.like)}' --mode bm25`
       );
     }
     const target = store.findIncludingArchive(args.like);
@@ -61,8 +66,8 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
   if (!args.keyword) {
     throw new Error(
       "Usage:\n" +
-      "  vt search <keyword> [--all] [--mode keyword|bm25|semantic|hybrid] [--limit N]\n" +
-      "  vt search --like <id> --mode bm25|semantic|hybrid [--all] [--limit N]"
+        "  vt search <keyword> [--all] [--mode keyword|bm25|semantic|hybrid] [--limit N]\n" +
+        "  vt search --like <id> --mode bm25|semantic|hybrid [--all] [--limit N]"
     );
   }
 

@@ -22,10 +22,7 @@ describe("similarity", () => {
   });
 
   it("scores high for similar titles with minor differences", () => {
-    const score = similarity(
-      "Fix login redirect bug",
-      "Fix the login redirect issue"
-    );
+    const score = similarity("Fix login redirect bug", "Fix the login redirect issue");
     assert.ok(score > 0.5, `Expected > 0.5 for similar titles but got ${score}`);
   });
 
@@ -51,10 +48,7 @@ describe("similarity", () => {
   });
 
   it("distinguishes clearly different tasks", () => {
-    const score = similarity(
-      "Add user authentication",
-      "Fix database migration"
-    );
+    const score = similarity("Add user authentication", "Fix database migration");
     assert.ok(score < 0.3, `Expected < 0.3 for different tasks but got ${score}`);
   });
 

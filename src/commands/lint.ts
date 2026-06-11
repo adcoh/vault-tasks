@@ -1,10 +1,6 @@
 import type { Config } from "../config.js";
 import { lintVault } from "../lint/index.js";
-import {
-  formatHumanReport,
-  formatJsonReport,
-  formatSummaryLine,
-} from "../lint/report.js";
+import { formatHumanReport, formatJsonReport, formatSummaryLine } from "../lint/report.js";
 import type { CheckName } from "../lint/types.js";
 
 const VALID_CHECKS: ReadonlySet<CheckName> = new Set(["broken", "orphans", "stale", "drift"]);
@@ -22,22 +18,20 @@ export function cmdLint(config: Config, args: LintCmdArgs): void {
   if (args.only !== undefined) {
     const v = args.only.toLowerCase();
     if (!VALID_CHECKS.has(v as CheckName)) {
-      console.error(
-        `Error: --only must be one of broken|orphans|stale|drift (got '${args.only}')`
-      );
+      console.error(`Error: --only must be one of broken|orphans|stale|drift (got '${args.only}')`);
       process.exitCode = 2;
       return;
     }
     only = v as CheckName;
   }
 
-  if (args.scope !== undefined && args.scope.includes("..")) {
+  if (args.scope?.includes("..")) {
     console.error("Error: --scope must be inside the vault (no '..')");
     process.exitCode = 2;
     return;
   }
 
-  let report;
+  let report: ReturnType<typeof lintVault>;
   try {
     report = lintVault(config, {
       only,

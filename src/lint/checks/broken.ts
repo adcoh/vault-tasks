@@ -10,10 +10,7 @@
 import type { ResolutionIndex, BrokenEntry, WikiLink } from "../types.js";
 import { resolveTarget } from "../resolve.js";
 
-export function findBrokenLinks(
-  links: WikiLink[],
-  index: ResolutionIndex
-): BrokenEntry[] {
+export function findBrokenLinks(links: WikiLink[], index: ResolutionIndex): BrokenEntry[] {
   const buckets = new Map<string, BrokenEntry>();
 
   for (const link of links) {

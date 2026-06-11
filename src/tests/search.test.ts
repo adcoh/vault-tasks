@@ -103,8 +103,10 @@ describe("searchTasks", () => {
       assert.equal(h.mode, "bm25");
       assert.ok(h.score > 0);
     }
-    assert.ok(!hits.find((h) => h.task.title.includes("database")),
-      "unrelated task should not appear in BM25 results for 'auth'");
+    assert.ok(
+      !hits.find((h) => h.task.title.includes("database")),
+      "unrelated task should not appear in BM25 results for 'auth'"
+    );
   });
 
   it("keyword mode falls back to substring matching with score 1.0", async () => {
@@ -203,8 +205,10 @@ describe("similarTasks", () => {
     const target = store.create({ title: "Fix auth bug" });
     store.create({ title: "Fix auth callback handling" });
     const hits = await similarTasks(store, target, { mode: "bm25" });
-    assert.ok(!hits.find((h) => h.task.filePath === target.filePath),
-      "target task must be excluded from its own similarity results");
+    assert.ok(
+      !hits.find((h) => h.task.filePath === target.filePath),
+      "target task must be excluded from its own similarity results"
+    );
   });
 
   it("returns related tasks ranked by similarity", async () => {
@@ -280,7 +284,9 @@ describe("searchTasks semantic / hybrid", () => {
     // A task matching both lexically and semantically should outrank the
     // unrelated DB task.
     const dbIdx = hits.findIndex((h) => h.task.title.includes("database"));
-    const authIdx = hits.findIndex((h) => h.task.title.includes("auth") || h.task.title.includes("Auth"));
+    const authIdx = hits.findIndex(
+      (h) => h.task.title.includes("auth") || h.task.title.includes("Auth")
+    );
     assert.ok(authIdx >= 0);
     if (dbIdx >= 0) assert.ok(authIdx < dbIdx, "auth task should rank above the unrelated DB task");
   });

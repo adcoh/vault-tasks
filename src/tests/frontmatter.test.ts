@@ -69,13 +69,13 @@ More text`;
   });
 
   it("handles value containing colon", () => {
-    const text = "---\ntitle: \"Fix: the login bug\"\n---\nBody";
+    const text = '---\ntitle: "Fix: the login bug"\n---\nBody';
     const { meta } = parseFrontmatter(text);
     assert.equal(meta["title"], "Fix: the login bug");
   });
 
   it("handles value containing --- in frontmatter", () => {
-    const text = "---\ntitle: \"Phase 1 --- Phase 2\"\n---\nBody";
+    const text = '---\ntitle: "Phase 1 --- Phase 2"\n---\nBody';
     const { meta } = parseFrontmatter(text);
     assert.equal(meta["title"], "Phase 1 --- Phase 2");
   });
@@ -349,9 +349,7 @@ tags:
     // ULIDs are all-uppercase Crockford base32; they must round-trip as a
     // plain string, not be coerced to a number or YAML-quoted unnecessarily.
     const ulid = "01HYXABCDEFGHJKMNPQRSTVWXY";
-    const { meta: parsed } = parseFrontmatter(
-      writeFrontmatter({ id: ulid, title: "t" }, "body")
-    );
+    const { meta: parsed } = parseFrontmatter(writeFrontmatter({ id: ulid, title: "t" }, "body"));
     assert.equal(parsed["id"], ulid);
     assert.equal(typeof parsed["id"], "string");
   });
@@ -386,9 +384,7 @@ Body`;
   it("round-trips a purely-numeric id string without becoming a number", () => {
     // A numeric task ID like "42" must survive write/parse as a string so
     // callers comparing `task.id === "42"` still succeed.
-    const { meta: parsed } = parseFrontmatter(
-      writeFrontmatter({ id: "42", title: "t" }, "body")
-    );
+    const { meta: parsed } = parseFrontmatter(writeFrontmatter({ id: "42", title: "t" }, "body"));
     assert.equal(parsed["id"], "42");
     assert.equal(typeof parsed["id"], "string");
   });

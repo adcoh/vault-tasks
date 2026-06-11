@@ -10,13 +10,31 @@
  */
 
 /** Characters that require double-quoting in a YAML value. */
-const YAML_SPECIAL = /[:#{}\[\]"'`|>!&*@,?\\]/;
+const YAML_SPECIAL = /[:#{}[\]"'`|>!&*@,?\\]/;
 
 /** YAML boolean/null literals that must be quoted to remain strings. */
 const YAML_RESERVED = new Set([
-  "true", "false", "null", "yes", "no", "on", "off",
-  "True", "False", "Null", "Yes", "No", "On", "Off",
-  "TRUE", "FALSE", "NULL", "YES", "NO", "ON", "OFF",
+  "true",
+  "false",
+  "null",
+  "yes",
+  "no",
+  "on",
+  "off",
+  "True",
+  "False",
+  "Null",
+  "Yes",
+  "No",
+  "On",
+  "Off",
+  "TRUE",
+  "FALSE",
+  "NULL",
+  "YES",
+  "NO",
+  "ON",
+  "OFF",
 ]);
 
 /**
@@ -53,11 +71,16 @@ function unquoteValue(raw: string): string {
   if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) {
     return raw.slice(1, -1).replace(/\\(.)/g, (_: string, ch: string) => {
       switch (ch) {
-        case "n": return "\n";
-        case "t": return "\t";
-        case '"': return '"';
-        case "\\": return "\\";
-        default: return ch;
+        case "n":
+          return "\n";
+        case "t":
+          return "\t";
+        case '"':
+          return '"';
+        case "\\":
+          return "\\";
+        default:
+          return ch;
       }
     });
   }
@@ -67,9 +90,7 @@ function unquoteValue(raw: string): string {
   return raw;
 }
 
-export function parseFrontmatter(
-  text: string
-): { meta: Record<string, unknown>; body: string } {
+export function parseFrontmatter(text: string): { meta: Record<string, unknown>; body: string } {
   // Normalize CRLF → LF
   const normalized = text.replace(/\r\n/g, "\n");
 
@@ -108,11 +129,7 @@ export function parseFrontmatter(
     // continuation like `title: Foo\n  - bar` would silently convert the
     // string scalar into a list and drop the first line.
     const listMatch = line.match(/^\s*-\s+(.+)$/);
-    if (
-      listMatch &&
-      currentKey !== null &&
-      (currentList !== null || meta[currentKey] === "")
-    ) {
+    if (listMatch && currentKey !== null && (currentList !== null || meta[currentKey] === "")) {
       if (currentList === null) {
         currentList = [];
       }
@@ -145,7 +162,7 @@ export function parseFrontmatter(
     }
 
     // Key-value pair — allow dots, hyphens, underscores in keys
-    const kvMatch = line.match(/^([\w][\w.\-]*):\s*(.*)$/);
+    const kvMatch = line.match(/^([\w][\w.-]*):\s*(.*)$/);
     if (kvMatch) {
       if (currentList !== null) {
         currentList = null;
@@ -164,9 +181,7 @@ export function parseFrontmatter(
       // Inline list: [tag1, tag2] — but not wikilinks [[like this]]
       const inlineList = rawValue.match(/^\[(.+)\]$/);
       if (inlineList && !rawValue.startsWith("[[")) {
-        const items = inlineList[1]
-          .split(",")
-          .map((v) => unquoteValue(v.trim()));
+        const items = inlineList[1].split(",").map((v) => unquoteValue(v.trim()));
         meta[currentKey] = items;
         currentList = items;
       } else if (rawValue) {
@@ -182,10 +197,7 @@ export function parseFrontmatter(
   return { meta, body };
 }
 
-export function writeFrontmatter(
-  meta: Record<string, unknown>,
-  body: string
-): string {
+export function writeFrontmatter(meta: Record<string, unknown>, body: string): string {
   const lines: string[] = ["---"];
 
   for (const [key, value] of Object.entries(meta)) {

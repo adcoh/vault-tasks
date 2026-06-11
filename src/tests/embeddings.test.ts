@@ -63,7 +63,10 @@ describe("createEmbedder", () => {
     const emb = createEmbedder(cfg({ embeddingProvider: "ollama" }));
     const out = await emb.embed(["hello"]);
     assert.deepEqual(out, [[0.1, 0.2, 0.3]]);
-    assert.ok(calls[0].url.startsWith("http://localhost:11434"), "uses the ollama default endpoint");
+    assert.ok(
+      calls[0].url.startsWith("http://localhost:11434"),
+      "uses the ollama default endpoint"
+    );
   });
 
   it("openai-shape: posts to /v1/embeddings and parses { data[].embedding }", async () => {
@@ -85,9 +88,14 @@ describe("createEmbedder", () => {
         ],
       },
     }));
-    const emb = createEmbedder(cfg({ embeddingProvider: "openai-compatible", embeddingEndpoint: "http://x" }));
+    const emb = createEmbedder(
+      cfg({ embeddingProvider: "openai-compatible", embeddingEndpoint: "http://x" })
+    );
     const out = await emb.embed(["a", "b"]);
-    assert.deepEqual(out, [[1, 1], [9, 9]]);
+    assert.deepEqual(out, [
+      [1, 1],
+      [9, 9],
+    ]);
   });
 
   it("chunks large inputs into batches", async () => {
@@ -168,10 +176,7 @@ describe("createEmbedder", () => {
   });
 
   it("cloud provider without an api key env name throws at construction", () => {
-    assert.throws(
-      () => createEmbedder(cfg({ embeddingProvider: "openai" })),
-      /needs an API key/
-    );
+    assert.throws(() => createEmbedder(cfg({ embeddingProvider: "openai" })), /needs an API key/);
   });
 
   it("cloud provider with an unset api key env var throws at construction", () => {
@@ -204,7 +209,9 @@ describe("createEmbedder", () => {
   it("transformers: constructs without throwing and defers the model load", () => {
     // The pipeline (and the optional dependency import) load lazily on first
     // embed(), so construction must not require the package to be present.
-    const emb = createEmbedder(cfg({ embeddingProvider: "transformers", embeddingModel: "some/model" }));
+    const emb = createEmbedder(
+      cfg({ embeddingProvider: "transformers", embeddingModel: "some/model" })
+    );
     assert.equal(emb.provider, "transformers");
     assert.equal(emb.model, "some/model");
   });

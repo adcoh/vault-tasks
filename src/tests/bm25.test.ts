@@ -87,16 +87,22 @@ describe("BM25Index", () => {
     const rareHits = idx.query("rare", 5);
     const commonHits = idx.query("common", 5);
     assert.equal(rareHits.length, 1);
-    assert.ok(rareHits[0].score > commonHits[0].score,
-      `rare-term score (${rareHits[0].score}) should exceed common-term top (${commonHits[0].score})`);
+    assert.ok(
+      rareHits[0].score > commonHits[0].score,
+      `rare-term score (${rareHits[0].score}) should exceed common-term top (${commonHits[0].score})`
+    );
   });
 
   it("saturates term frequency (k1 bound)", () => {
     // BM25's TF saturation: adding a 4th occurrence yields less score than
     // adding the 2nd occurrence. We verify by comparing single-term scores on
     // documents that differ only in how often the query term appears.
-    const lowReps = task({ id: "0001", title: "auth", body: "auth" });          // 2 occurrences (title doubled)
-    const highReps = task({ id: "0002", title: "auth", body: "auth auth auth auth auth auth auth auth" });
+    const lowReps = task({ id: "0001", title: "auth", body: "auth" }); // 2 occurrences (title doubled)
+    const highReps = task({
+      id: "0002",
+      title: "auth",
+      body: "auth auth auth auth auth auth auth auth",
+    });
     const idx = new BM25Index([lowReps, highReps]);
     const hits = idx.query("auth", 5);
     const lowScore = hits.find((h) => h.task.id === "0001")!.score;
@@ -104,8 +110,10 @@ describe("BM25Index", () => {
     // High-reps must score higher (more matches) ...
     assert.ok(highScore > lowScore);
     // ... but not 4x higher (TF saturation), even though it has ~5x more occurrences.
-    assert.ok(highScore < lowScore * 4,
-      `TF should saturate: highScore=${highScore} not ~5x lowScore=${lowScore}`);
+    assert.ok(
+      highScore < lowScore * 4,
+      `TF should saturate: highScore=${highScore} not ~5x lowScore=${lowScore}`
+    );
   });
 
   it("respects the limit parameter", () => {
@@ -138,10 +146,7 @@ describe("BM25Index", () => {
   });
 
   it("size reflects the document count", () => {
-    const idx = new BM25Index([
-      task({ id: "0001", title: "a" }),
-      task({ id: "0002", title: "b" }),
-    ]);
+    const idx = new BM25Index([task({ id: "0001", title: "a" }), task({ id: "0002", title: "b" })]);
     assert.equal(idx.size, 2);
   });
 });

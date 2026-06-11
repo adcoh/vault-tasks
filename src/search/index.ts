@@ -6,7 +6,7 @@ import { EmbedCache, capEmbeddingText, embedText } from "./embed-cache.js";
 import { createEmbedder } from "./embeddings.js";
 import type { Embedder } from "./embeddings.js";
 import { tokenize } from "./tokenize.js";
-import type { SearchHit, SearchMode, SearchOptions } from "./types.js";
+import type { SearchHit, SearchOptions } from "./types.js";
 import { VectorIndex } from "./vector-store.js";
 
 export type { SearchHit, SearchMode, SearchOptions } from "./types.js";
@@ -198,7 +198,9 @@ export async function similarTasks(
     const bmCorpus = corpus.map((e) => e.task);
     const queryTokens = tokenize(`${target.title} ${target.tags.join(" ")}`);
     const bmHits =
-      queryTokens.length > 0 ? new BM25Index(bmCorpus).queryTokens(queryTokens, bmCorpus.length) : [];
+      queryTokens.length > 0
+        ? new BM25Index(bmCorpus).queryTokens(queryTokens, bmCorpus.length)
+        : [];
     return rrfFuse([bmHits, semHits], limit);
   }
 

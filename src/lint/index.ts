@@ -43,7 +43,9 @@ function relPathPosix(p: string): string {
 
 function normaliseScope(scope: string | undefined): string | null {
   if (!scope) return null;
-  const cleaned = relPathPosix(scope).replace(/^\.\/+/, "").replace(/\/+$/, "");
+  const cleaned = relPathPosix(scope)
+    .replace(/^\.\/+/, "")
+    .replace(/\/+$/, "");
   return cleaned === "" ? null : cleaned;
 }
 
@@ -74,15 +76,12 @@ export function lintVault(config: Config, opts: LintOptions = {}): LintReport {
   const index = buildIndex(allFiles);
 
   for (const [key, paths] of index.collisions) {
-    onWarn(
-      `${paths.length} files share normalised key '${key}': ${paths.join(", ")}`
-    );
+    onWarn(`${paths.length} files share normalised key '${key}': ${paths.join(", ")}`);
   }
 
   const scope = normaliseScope(opts.scope);
-  const scopedFiles: VaultFile[] = scope === null
-    ? allFiles
-    : allFiles.filter((f) => inScope(f.relPath, scope));
+  const scopedFiles: VaultFile[] =
+    scope === null ? allFiles : allFiles.filter((f) => inScope(f.relPath, scope));
 
   const allLinks = collectWikilinks(
     allFiles,
@@ -91,9 +90,7 @@ export function lintVault(config: Config, opts: LintOptions = {}): LintReport {
     lint.templatePatterns
   );
 
-  const scopedLinks = scope === null
-    ? allLinks
-    : allLinks.filter((l) => inScope(l.source, scope));
+  const scopedLinks = scope === null ? allLinks : allLinks.filter((l) => inScope(l.source, scope));
 
   const inbound = buildInboundMap(allLinks, index);
 
@@ -106,21 +103,12 @@ export function lintVault(config: Config, opts: LintOptions = {}): LintReport {
   if (wantBroken && !opts.noSuggestions) {
     attachSuggestions(broken, index, lint.suggestionThreshold);
   }
-  const leverageFixes = wantBroken && !opts.noSuggestions
-    ? computeLeverageFixes(broken)
-    : [];
+  const leverageFixes = wantBroken && !opts.noSuggestions ? computeLeverageFixes(broken) : [];
 
-  const orphans = wantOrphans
-    ? findOrphanEvergreens(scopedFiles, inbound, evergreenDirRel)
-    : [];
+  const orphans = wantOrphans ? findOrphanEvergreens(scopedFiles, inbound, evergreenDirRel) : [];
 
   const stale = wantStale
-    ? findStaleReferences(
-        scopedFiles,
-        inbound,
-        referenceDirRel,
-        lint.referenceExclude
-      )
+    ? findStaleReferences(scopedFiles, inbound, referenceDirRel, lint.referenceExclude)
     : [];
 
   const drift = wantDrift
@@ -134,10 +122,7 @@ export function lintVault(config: Config, opts: LintOptions = {}): LintReport {
     drift: drift.length,
   };
   const hasIssues =
-    summary.broken > 0 ||
-    summary.orphans > 0 ||
-    summary.stale > 0 ||
-    summary.drift > 0;
+    summary.broken > 0 || summary.orphans > 0 || summary.stale > 0 || summary.drift > 0;
 
   return {
     broken,

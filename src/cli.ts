@@ -172,7 +172,11 @@ function isFlag(arg: string): boolean {
   return false;
 }
 
-function parseArgs(argv: string[]): { command: string; args: Record<string, string | boolean>; positional: string[] } {
+function parseArgs(argv: string[]): {
+  command: string;
+  args: Record<string, string | boolean>;
+  positional: string[];
+} {
   const command = argv[0] ?? "";
   const args: Record<string, string | boolean> = {};
   const positional: string[] = [];
@@ -203,7 +207,7 @@ function parseArgs(argv: string[]): { command: string; args: Record<string, stri
         } else {
           throw new Error(
             `Flag --${key} is boolean; expected true/false/1/0 but got '${rawValue}'. ` +
-            `Either pass --${key} on its own, or use --${key}=true / --${key}=false.`
+              `Either pass --${key} on its own, or use --${key}=true / --${key}=false.`
           );
         }
       } else {
@@ -284,7 +288,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  let config;
+  let config: ReturnType<typeof loadConfig>;
   try {
     config = loadConfig();
   } catch (err) {
@@ -307,7 +311,9 @@ async function main(): Promise<void> {
 
       case "new":
         if (!positional[0]) {
-          console.error("Usage: vt new <title> [--priority P] [--tags t1,t2] [--source S] [--commit] [--body TEXT|--body-file PATH]");
+          console.error(
+            "Usage: vt new <title> [--priority P] [--tags t1,t2] [--source S] [--commit] [--body TEXT|--body-file PATH]"
+          );
           process.exitCode = 1;
           return;
         }
@@ -338,8 +344,8 @@ async function main(): Promise<void> {
         if (!positional[0] && args["like"] === undefined) {
           console.error(
             "Usage:\n" +
-            "  vt search <keyword> [--all] [--mode keyword|bm25|semantic|hybrid] [--limit N]\n" +
-            "  vt search --like <id> --mode bm25|semantic|hybrid [--all] [--limit N]"
+              "  vt search <keyword> [--all] [--mode keyword|bm25|semantic|hybrid] [--limit N]\n" +
+              "  vt search --like <id> --mode bm25|semantic|hybrid [--all] [--limit N]"
           );
           process.exitCode = 1;
           return;
@@ -390,7 +396,9 @@ async function main(): Promise<void> {
 
       case "edit":
         if (!positional[0]) {
-          console.error("Usage: vt edit <id-or-substring> [--status S] [--priority P] [--tags t1,t2]");
+          console.error(
+            "Usage: vt edit <id-or-substring> [--status S] [--priority P] [--tags t1,t2]"
+          );
           process.exitCode = 1;
           return;
         }

@@ -74,9 +74,7 @@ export function cmdNew(
   }
 
   const store = new TaskStore(config);
-  const tags = args.tags
-    ? args.tags.split(",").map((t) => t.trim())
-    : [];
+  const tags = args.tags ? args.tags.split(",").map((t) => t.trim()) : [];
 
   // Check for similar existing tasks before creating. Bounded by
   // `dedupeScanLimit` so large archives don't turn every `vt new` into an

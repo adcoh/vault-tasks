@@ -138,14 +138,14 @@ export function createEmbedder(search: SearchConfig): Embedder {
     if (!envName) {
       throw new Error(
         `Provider '${provider}' needs an API key. Set [search] embedding_api_key_env ` +
-        `to the NAME of an environment variable holding the key.`
+          `to the NAME of an environment variable holding the key.`
       );
     }
     apiKey = process.env[envName] ?? "";
     if (!apiKey && spec.requiresKey) {
       throw new Error(
         `Provider '${provider}' needs an API key, but environment variable ` +
-        `$${envName} is empty or unset. Export it and retry.`
+          `$${envName} is empty or unset. Export it and retry.`
       );
     }
   }
@@ -182,7 +182,12 @@ async function embedInBatches(
   return out;
 }
 
-async function postJson(url: string, body: unknown, headers: Record<string, string>, spec: ProviderSpec): Promise<unknown> {
+async function postJson(
+  url: string,
+  body: unknown,
+  headers: Record<string, string>,
+  spec: ProviderSpec
+): Promise<unknown> {
   let res: Response;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -198,12 +203,12 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error(
         `${spec.label} timed out after ${REQUEST_TIMEOUT_MS / 1000}s at ${url}${hint}. ` +
-        `Check the endpoint is reachable, or set [search] embedding_provider.`
+          `Check the endpoint is reachable, or set [search] embedding_provider.`
       );
     }
     throw new Error(
       `${spec.label} not reachable at ${url}${hint}, or set [search] embedding_provider. ` +
-      `(${(err as Error).message})`
+        `(${(err as Error).message})`
     );
   } finally {
     clearTimeout(timer);
@@ -217,7 +222,7 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
     }
     throw new Error(
       `${spec.label} embedding request failed: HTTP ${res.status} ${res.statusText}` +
-      `${detail ? ` — ${detail}` : ""}`
+        `${detail ? ` — ${detail}` : ""}`
     );
   }
   try {
@@ -230,7 +235,9 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
 /** Validate one vector from a server response. No `as` casts on wire data. */
 function coerceVector(value: unknown, provider: string, expectedDim: number | null): number[] {
   if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`Provider '${provider}' returned a malformed embedding (not a non-empty array).`);
+    throw new Error(
+      `Provider '${provider}' returned a malformed embedding (not a non-empty array).`
+    );
   }
   const vec = new Array<number>(value.length);
   for (let i = 0; i < value.length; i++) {
@@ -243,7 +250,7 @@ function coerceVector(value: unknown, provider: string, expectedDim: number | nu
   if (expectedDim !== null && vec.length !== expectedDim) {
     throw new Error(
       `Embedding dimension mismatch: model returned ${vec.length}, but [search] ` +
-      `embedding_dimensions is ${expectedDim}. Update or remove that setting.`
+        `embedding_dimensions is ${expectedDim}. Update or remove that setting.`
     );
   }
   return vec;
@@ -296,9 +303,10 @@ async function openAiEmbed(
       throw new Error(`${spec.label} response item ${pos} has no 'embedding'.`);
     }
     const rawIndex = (item as { index?: unknown }).index;
-    const idx = Number.isInteger(rawIndex) && (rawIndex as number) >= 0 && (rawIndex as number) < data.length
-      ? (rawIndex as number)
-      : pos;
+    const idx =
+      Number.isInteger(rawIndex) && (rawIndex as number) >= 0 && (rawIndex as number) < data.length
+        ? (rawIndex as number)
+        : pos;
     out[idx] = coerceVector((item as { embedding: unknown }).embedding, spec.label, expectedDim);
   }
   for (let i = 0; i < out.length; i++) {
@@ -335,8 +343,8 @@ function makeTransformersEmbedder(
       } catch (err) {
         throw new Error(
           `Provider 'transformers' needs the optional package — run ` +
-          `\`npm i @huggingface/transformers\`, or switch [search] embedding_provider ` +
-          `to 'ollama'. (${(err as Error).message})`
+            `\`npm i @huggingface/transformers\`, or switch [search] embedding_provider ` +
+            `to 'ollama'. (${(err as Error).message})`
         );
       }
       const pipe = (await mod.pipeline("feature-extraction", model)) as (

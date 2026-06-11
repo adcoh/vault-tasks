@@ -9,11 +9,7 @@ import { buildIndex, normKey, resolveTarget, stripTargetSuffixes } from "../lint
 import { collectWikilinks, isTemplatePlaceholder, readVaultFiles } from "../lint/collect.js";
 import { findBrokenLinks } from "../lint/checks/broken.js";
 import { attachSuggestions, computeLeverageFixes } from "../lint/suggest.js";
-import {
-  formatHumanReport,
-  formatJsonReport,
-  formatSummaryLine,
-} from "../lint/report.js";
+import { formatHumanReport, formatJsonReport, formatSummaryLine } from "../lint/report.js";
 import type { BrokenEntry, LintReport } from "../lint/types.js";
 
 function makeConfig(dir: string, overrides: Partial<Config["lint"]> = {}): Config {
@@ -115,11 +111,7 @@ describe("buildIndex + resolveTarget", () => {
   });
 
   it("resolves against title: frontmatter", () => {
-    write(
-      dir,
-      "title-fm.md",
-      "---\ntitle: \"Some Title\"\n---\nBody"
-    );
+    write(dir, "title-fm.md", '---\ntitle: "Some Title"\n---\nBody');
     const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
     const idx = buildIndex(files);
     assert.equal(resolveTarget("Some Title", idx), "title-fm.md");
@@ -127,11 +119,7 @@ describe("buildIndex + resolveTarget", () => {
   });
 
   it("resolves against aliases", () => {
-    write(
-      dir,
-      "canonical.md",
-      "---\ntitle: Canonical\naliases: [bioform-ai, BioForm]\n---\nBody"
-    );
+    write(dir, "canonical.md", "---\ntitle: Canonical\naliases: [bioform-ai, BioForm]\n---\nBody");
     const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
     const idx = buildIndex(files);
     assert.equal(resolveTarget("bioform ai", idx), "canonical.md");
@@ -151,10 +139,7 @@ describe("buildIndex + resolveTarget", () => {
     write(dir, "10-areas/investing/CONTEXT.md", "Body");
     const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
     const idx = buildIndex(files);
-    assert.equal(
-      resolveTarget("parenting/CONTEXT", idx),
-      "10-areas/parenting/CONTEXT.md"
-    );
+    assert.equal(resolveTarget("parenting/CONTEXT", idx), "10-areas/parenting/CONTEXT.md");
     // Just "CONTEXT" is ambiguous (two files share the basename) — must
     // not silently pick one.
     assert.equal(resolveTarget("CONTEXT", idx), null);
@@ -285,7 +270,7 @@ describe("attachSuggestions", () => {
     write(dir, "bioform-ai.md", "---\ntitle: BioForm AI\n---\nBody");
     write(dir, "broken.md", "[[bioform ai]]");
     const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
-    const links = collectWikilinks(files, [], [], []);
+    const _links = collectWikilinks(files, [], [], []);
     const idx = buildIndex(files);
     // Nothing's broken because resolution succeeds via title match.
     // Test the suggestion engine directly with a forced broken entry.
@@ -322,9 +307,7 @@ describe("attachSuggestions", () => {
 
   it("computes leverage fixes summed across broken targets", () => {
     write(dir, "canonical.md", "---\ntitle: Canonical\n---\nBody");
-    const idx = buildIndex(
-      readVaultFiles(dir, [".git", "node_modules"], () => {})
-    );
+    const idx = buildIndex(readVaultFiles(dir, [".git", "node_modules"], () => {}));
     const broken: BrokenEntry[] = [
       {
         target: "canonicaal", // typo, similar to "canonical"
@@ -360,7 +343,11 @@ describe("lintVault", () => {
       "30-evergreen/note.md",
       "---\ntitle: Note\ntags: [foo]\n---\n# Note\n\n[[other]]\n\n## Related\n\n[[other]]"
     );
-    write(dir, "30-evergreen/other.md", "---\ntitle: Other\ntags: [foo]\n---\n# Other\n\n[[note]]\n\n## Related\n\n[[note]]");
+    write(
+      dir,
+      "30-evergreen/other.md",
+      "---\ntitle: Other\ntags: [foo]\n---\n# Other\n\n[[note]]\n\n## Related\n\n[[note]]"
+    );
     const cfg = makeConfig(dir);
     const report = lintVault(cfg);
     assert.equal(report.summary.broken, 0);
@@ -383,7 +370,11 @@ describe("lintVault", () => {
     // Stale: a reference with no incoming links
     write(dir, "40-references/abandoned.md", "Body");
     // Resolution target for [[somewhere]]
-    write(dir, "30-evergreen/somewhere.md", "---\ntitle: Somewhere\ntags: [x]\n---\n# Somewhere\n\n[[lonely]]\n\n## Related");
+    write(
+      dir,
+      "30-evergreen/somewhere.md",
+      "---\ntitle: Somewhere\ntags: [x]\n---\n# Somewhere\n\n[[lonely]]\n\n## Related"
+    );
 
     const cfg = makeConfig(dir);
     const report = lintVault(cfg);
@@ -400,10 +391,11 @@ describe("lintVault", () => {
     assert.deepEqual(report.orphans, ["30-evergreen/messy.md"]);
     assert.deepEqual(report.stale, ["40-references/abandoned.md"]);
     assert.equal(report.drift[0].filePath, "30-evergreen/messy.md");
-    assert.deepEqual(
-      report.drift[0].issues,
-      ["no frontmatter", "no wikilinks in body", "no ## Related section"]
-    );
+    assert.deepEqual(report.drift[0].issues, [
+      "no frontmatter",
+      "no wikilinks in body",
+      "no ## Related section",
+    ]);
     assert.equal(report.hasIssues, true);
   });
 
@@ -427,7 +419,11 @@ describe("lintVault", () => {
       "30-evergreen/inbox.md",
       "---\ntitle: Inbox\ntags: [x]\nlint_orphan_ok: true\n---\n# Inbox\n\n[[noop]]\n\n## Related"
     );
-    write(dir, "30-evergreen/noop.md", "---\ntitle: Noop\ntags: [x]\n---\n# Noop\n\n[[inbox]]\n\n## Related");
+    write(
+      dir,
+      "30-evergreen/noop.md",
+      "---\ntitle: Noop\ntags: [x]\n---\n# Noop\n\n[[inbox]]\n\n## Related"
+    );
     const cfg = makeConfig(dir);
     const report = lintVault(cfg, { only: "orphans" });
     assert.equal(report.summary.orphans, 0);
@@ -448,7 +444,11 @@ describe("lintVault", () => {
     // [[shared]] lives outside the scope; it should still resolve so the
     // link inside the scope is not falsely flagged as broken.
     write(dir, "shared.md", "---\ntitle: Shared\n---\nBody");
-    write(dir, "30-evergreen/note.md", "---\ntitle: Note\ntags: [x]\n---\n# Note\n\n[[shared]]\n\n## Related");
+    write(
+      dir,
+      "30-evergreen/note.md",
+      "---\ntitle: Note\ntags: [x]\n---\n# Note\n\n[[shared]]\n\n## Related"
+    );
     const cfg = makeConfig(dir);
     const report = lintVault(cfg, { scope: "30-evergreen" });
     assert.equal(report.summary.broken, 0);
@@ -628,15 +628,8 @@ describe("config validation for [lint]", () => {
 
   it("rejects an invalid template_patterns regex with file context", async () => {
     const { loadConfig } = await import("../config.js");
-    write(
-      dir,
-      ".vault-tasks.toml",
-      `[lint]\ntemplate_patterns = ["valid", "[unclosed"]\n`
-    );
-    assert.throws(
-      () => loadConfig(dir),
-      /template_patterns\[1\]:.*"\[unclosed"/
-    );
+    write(dir, ".vault-tasks.toml", `[lint]\ntemplate_patterns = ["valid", "[unclosed"]\n`);
+    assert.throws(() => loadConfig(dir), /template_patterns\[1\]:.*"\[unclosed"/);
   });
 
   it("rejects suggestion_threshold outside 0..1", async () => {

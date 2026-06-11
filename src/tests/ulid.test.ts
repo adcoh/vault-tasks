@@ -1,11 +1,6 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import {
-  generateUlid,
-  isValidUlid,
-  decodeTime,
-  _resetMonotonicState,
-} from "../ulid.js";
+import { generateUlid, isValidUlid, decodeTime, _resetMonotonicState } from "../ulid.js";
 
 describe("generateUlid", () => {
   beforeEach(() => {
@@ -114,28 +109,16 @@ describe("decodeTime", () => {
   });
 
   it("throws on invalid characters", () => {
-    assert.throws(
-      () => decodeTime("!1ARZ3NDEKTSV4RRGSSFQ9XNHY"),
-      /Invalid ULID character/
-    );
+    assert.throws(() => decodeTime("!1ARZ3NDEKTSV4RRGSSFQ9XNHY"), /Invalid ULID character/);
   });
 
   it("rejects Crockford ambiguity characters I/L/O (canonical-strict)", () => {
     // We're the sole ULID producer, so a ULID arriving with one of these
     // letters is either corrupted or hand-edited. Match isValidUlid's
     // strictness instead of silently translating I→1 / L→1 / O→0.
-    assert.throws(
-      () => decodeTime("01ARZ3NDLKTSV4RRGSSFQ9XNHY"),
-      /Invalid ULID character/
-    );
-    assert.throws(
-      () => decodeTime("01ARZ3NDIKTSV4RRGSSFQ9XNHY"),
-      /Invalid ULID character/
-    );
-    assert.throws(
-      () => decodeTime("01ARZ3NDOKTSV4RRGSSFQ9XNHY"),
-      /Invalid ULID character/
-    );
+    assert.throws(() => decodeTime("01ARZ3NDLKTSV4RRGSSFQ9XNHY"), /Invalid ULID character/);
+    assert.throws(() => decodeTime("01ARZ3NDIKTSV4RRGSSFQ9XNHY"), /Invalid ULID character/);
+    assert.throws(() => decodeTime("01ARZ3NDOKTSV4RRGSSFQ9XNHY"), /Invalid ULID character/);
   });
 });
 

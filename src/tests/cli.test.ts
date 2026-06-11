@@ -1,7 +1,14 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseFrontmatter } from "../frontmatter.js";
@@ -53,11 +60,7 @@ function runWithStdin(args: string[], cwd: string, input: string): RunResult {
   }
 }
 
-function runWithEnv(
-  args: string[],
-  cwd: string,
-  env: Record<string, string>
-): RunResult {
+function runWithEnv(args: string[], cwd: string, env: Record<string, string>): RunResult {
   try {
     const stdout = execFileSync("node", [CLI, ...args], {
       cwd,
@@ -107,7 +110,10 @@ describe("CLI integration", () => {
   });
 
   it("new creates task file with correct frontmatter", () => {
-    const result = run(["new", "Test task", "--priority", "high", "--tags", "ui,auth", "--source", "[[2026-03-31]]"], dir);
+    const result = run(
+      ["new", "Test task", "--priority", "high", "--tags", "ui,auth", "--source", "[[2026-03-31]]"],
+      dir
+    );
     assert.equal(result.exitCode, 0);
 
     const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md"));
@@ -153,7 +159,10 @@ describe("CLI integration", () => {
     const result = run(["search", "auth", "--mode", "bm25"], dir);
     assert.equal(result.exitCode, 0);
     // Header should include SCORE column for bm25 output.
-    assert.ok(result.stdout.includes("SCORE"), `expected SCORE column in output:\n${result.stdout}`);
+    assert.ok(
+      result.stdout.includes("SCORE"),
+      `expected SCORE column in output:\n${result.stdout}`
+    );
     // Both auth-containing tasks should appear; the DB migration should not.
     assert.ok(result.stdout.includes("Fix auth redirect bug"));
     assert.ok(result.stdout.includes("Auth callback handling"));
@@ -174,8 +183,10 @@ describe("CLI integration", () => {
     const result = run(["search", "--like", "1", "--mode", "bm25"], dir);
     assert.equal(result.exitCode, 0);
     // The target task itself must NOT appear in the output.
-    assert.ok(!result.stdout.includes("Fix auth redirect bug"),
-      `target task should be excluded:\n${result.stdout}`);
+    assert.ok(
+      !result.stdout.includes("Fix auth redirect bug"),
+      `target task should be excluded:\n${result.stdout}`
+    );
     // A related task should appear; an unrelated one should not.
     assert.ok(result.stdout.includes("Fix auth callback handling"));
     assert.ok(!result.stdout.includes("Refactor database migration"));
@@ -229,9 +240,7 @@ describe("CLI integration", () => {
     }
     const result = run(["search", "auth", "--mode", "bm25", "--limit", "2"], dir);
     assert.equal(result.exitCode, 0);
-    const taskRows = result.stdout
-      .split("\n")
-      .filter((l) => /^\d{4}\s/.test(l));
+    const taskRows = result.stdout.split("\n").filter((l) => /^\d{4}\s/.test(l));
     assert.equal(taskRows.length, 2);
   });
 
@@ -258,7 +267,10 @@ describe("CLI integration", () => {
 
   it("search --limit rejects unsafe-integer values", () => {
     run(["new", "Fix auth bug"], dir);
-    const result = run(["search", "auth", "--mode", "bm25", "--limit", "99999999999999999999"], dir);
+    const result = run(
+      ["search", "auth", "--mode", "bm25", "--limit", "99999999999999999999"],
+      dir
+    );
     assert.equal(result.exitCode, 1);
     assert.match(result.stderr, /--limit must be a positive integer/);
   });
@@ -276,8 +288,10 @@ describe("CLI integration", () => {
     run(["new", "high auth task", "--priority", "high"], dir);
     const result = run(["search", "auth", "--limit", "1"], dir);
     assert.equal(result.exitCode, 0);
-    assert.ok(result.stdout.includes("high auth task"),
-      `--limit 1 must keep the highest-priority match:\n${result.stdout}`);
+    assert.ok(
+      result.stdout.includes("high auth task"),
+      `--limit 1 must keep the highest-priority match:\n${result.stdout}`
+    );
   });
 
   it("search keyword mode matches task tags", () => {
@@ -595,8 +609,8 @@ describe("CLI with ULID strategy", () => {
     // The default is "commented-out" but the example string must be "ulid".
     assert.match(
       config,
-      /\[id\][^\[]*strategy\s*=\s*"ulid"/s,
-      "default config should document strategy = \"ulid\" under [id]"
+      /\[id\][^[]*strategy\s*=\s*"ulid"/s,
+      'default config should document strategy = "ulid" under [id]'
     );
   });
 
@@ -635,7 +649,9 @@ describe("CLI with ULID strategy", () => {
     assert.ok(result.stdout.includes("archived"));
 
     // Task should be in archive
-    const archiveFiles = readdirSync(join(dir, "backlog", "archive")).filter((f: string) => f.endsWith(".md"));
+    const archiveFiles = readdirSync(join(dir, "backlog", "archive")).filter((f: string) =>
+      f.endsWith(".md")
+    );
     assert.equal(archiveFiles.length, 1);
   });
 
@@ -669,8 +685,10 @@ describe("CLI with ULID strategy", () => {
     run(["new", "Duplicate me"], dir);
     const result = run(["new", "Duplicate me", "--no-dedupe=true"], dir);
     assert.equal(result.exitCode, 0);
-    assert.ok(!result.stderr.includes("Similar tasks found"),
-      "--no-dedupe=true must suppress the warning");
+    assert.ok(
+      !result.stderr.includes("Similar tasks found"),
+      "--no-dedupe=true must suppress the warning"
+    );
   });
 
   it("--no-dedupe=garbage is rejected with actionable error", () => {
@@ -722,7 +740,9 @@ describe("CLI legacy sequential detection", () => {
     const result = run(["new", "Second task"], dir);
     assert.equal(result.exitCode, 0, `stderr: ${result.stderr}`);
 
-    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md")).sort();
+    const files = readdirSync(join(dir, "backlog"))
+      .filter((f: string) => f.endsWith(".md"))
+      .sort();
     assert.equal(files.length, 2);
     // Second file must be NNNN-prefixed, not a 26-char ULID
     assert.match(files[1], /^0002-/);
@@ -755,7 +775,9 @@ describe("CLI legacy sequential detection", () => {
     const result = run(["new", "Next task"], dir);
     assert.equal(result.exitCode, 0, `stderr: ${result.stderr}`);
 
-    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md")).sort();
+    const files = readdirSync(join(dir, "backlog"))
+      .filter((f: string) => f.endsWith(".md"))
+      .sort();
     assert.equal(files.length, 2);
     assert.match(files[1], /^0043-/);
   });
@@ -776,7 +798,9 @@ describe("CLI legacy sequential detection", () => {
 
     const result = run(["new", "New ulid"], dir);
     assert.equal(result.exitCode, 0);
-    const files = readdirSync(join(dir, "backlog")).filter((f: string) => f.endsWith(".md")).sort();
+    const files = readdirSync(join(dir, "backlog"))
+      .filter((f: string) => f.endsWith(".md"))
+      .sort();
     assert.equal(files.length, 2);
     // New file must be a ULID, not 0002
     assert.ok(
@@ -794,10 +818,7 @@ describe("CLI config validation", () => {
   });
 
   it("rejects invalid [id] strategy with actionable error", () => {
-    writeFileSync(
-      join(dir, ".vault-tasks.toml"),
-      '[id]\nstrategy = "uild"\n'
-    );
+    writeFileSync(join(dir, ".vault-tasks.toml"), '[id]\nstrategy = "uild"\n');
     const result = run(["list"], dir);
     assert.notEqual(result.exitCode, 0);
     assert.match(result.stderr, /Invalid \[id\] strategy/);
@@ -805,10 +826,7 @@ describe("CLI config validation", () => {
   });
 
   it("rejects dedupe_threshold out of range", () => {
-    writeFileSync(
-      join(dir, ".vault-tasks.toml"),
-      '[task]\ndedupe_threshold = 2\n'
-    );
+    writeFileSync(join(dir, ".vault-tasks.toml"), "[task]\ndedupe_threshold = 2\n");
     const result = run(["list"], dir);
     assert.notEqual(result.exitCode, 0);
     assert.match(result.stderr, /dedupe_threshold/);
@@ -839,11 +857,7 @@ describe("CLI config validation", () => {
   });
 
   it("new --body - reads body from stdin", () => {
-    const result = runWithStdin(
-      ["new", "Stdin task", "--body", "-"],
-      dir,
-      "Piped body content"
-    );
+    const result = runWithStdin(["new", "Stdin task", "--body", "-"], dir, "Piped body content");
     assert.equal(result.exitCode, 0);
 
     const files = readdirSync(join(dir, "backlog")).filter((f) => f.endsWith(".md"));
@@ -854,10 +868,7 @@ describe("CLI config validation", () => {
   });
 
   it("new --body and --body-file are mutually exclusive", () => {
-    const result = run(
-      ["new", "T", "--body", "x", "--body-file", "y"],
-      dir
-    );
+    const result = run(["new", "T", "--body", "x", "--body-file", "y"], dir);
     assert.equal(result.exitCode, 2);
     assert.match(result.stderr, /mutually exclusive/);
   });
@@ -979,11 +990,9 @@ describe("CLI config validation", () => {
     // command must run inside the CLI's main try/catch so users get a clean
     // one-line error and a non-zero exit code, not an unhandled exception.
     const missing = join(dir, "does-not-exist-templates-dir");
-    const result = runWithEnv(
-      ["install-skills", "--list"],
-      dir,
-      { VAULT_TASKS_TEMPLATES_DIR: missing }
-    );
+    const result = runWithEnv(["install-skills", "--list"], dir, {
+      VAULT_TASKS_TEMPLATES_DIR: missing,
+    });
     assert.equal(result.exitCode, 1);
     assert.match(result.stderr, /VAULT_TASKS_TEMPLATES_DIR/);
     assert.ok(result.stderr.includes(missing), "error must include the offending path");

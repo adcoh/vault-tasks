@@ -1,5 +1,12 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative } from "node:path";
 import type { Task } from "../task.js";
 import type { Embedder } from "./embeddings.js";
@@ -35,7 +42,7 @@ export class EmbedCache {
   private readonly cachePath: string;
 
   constructor(
-    private readonly vaultRoot: string,
+    vaultRoot: string,
     private readonly provider: string,
     private readonly model: string,
     private readonly expectedDim: number | null = null
@@ -126,7 +133,11 @@ export class EmbedCache {
     const file = parsed as Partial<CacheFile>;
     if (file.version !== CACHE_VERSION) return map;
     if (file.provider !== this.provider || file.model !== this.model) return map;
-    if (this.expectedDim !== null && file.dimensions != null && file.dimensions !== this.expectedDim) {
+    if (
+      this.expectedDim !== null &&
+      file.dimensions != null &&
+      file.dimensions !== this.expectedDim
+    ) {
       return map; // header disagrees with configured dims — discard
     }
     const entries = file.entries;

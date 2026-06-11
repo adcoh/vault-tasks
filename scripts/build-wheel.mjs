@@ -36,7 +36,9 @@ if (!existsSync(templatesDir)) {
   fail(`templates/ not found at ${templatesDir}.`);
 }
 if (!existsSync(pythonPkgDir)) {
-  fail(`python/vault_tasks/ not found at ${pythonPkgDir}. Did you check out the wheel scaffolding?`);
+  fail(
+    `python/vault_tasks/ not found at ${pythonPkgDir}. Did you check out the wheel scaffolding?`
+  );
 }
 
 // Version source: VAULT_TASKS_VERSION_OVERRIDE env var (used by the TestPyPI

@@ -129,10 +129,7 @@ export function buildIndex(files: VaultFile[]): ResolutionIndex {
  * the two apart by design. Ambiguous targets must be disambiguated by the
  * author before they have a defined meaning.
  */
-export function resolveTarget(
-  rawTarget: string,
-  index: ResolutionIndex
-): string | null {
+export function resolveTarget(rawTarget: string, index: ResolutionIndex): string | null {
   const target = stripTargetSuffixes(rawTarget);
   if (!target) return null;
 
