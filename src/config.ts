@@ -197,7 +197,6 @@ export function findConfigFile(startDir: string = process.cwd()): string | null 
 export function parseToml(text: string): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   let currentSection: Record<string, unknown> = result;
-  let _currentSectionPath: string[] = [];
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -209,7 +208,6 @@ export function parseToml(text: string): Record<string, unknown> {
     const sectionMatch = line.match(/^\[([^\]]+)\]$/);
     if (sectionMatch) {
       const parts = sectionMatch[1].split(".");
-      _currentSectionPath = parts;
 
       // Navigate/create nested objects
       let target = result;
