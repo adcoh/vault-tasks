@@ -39,9 +39,8 @@ function displayStatus(s: string): string {
 //  - Convert \r, \n, \t to spaces so layout is preserved (rather than
 //    silently shortened) when content with line breaks is rendered.
 export function sanitizeForDisplay(s: string): string {
-  return s
-    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, "")
-    .replace(/[\r\n\t]/g, " ");
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control bytes is the point — this is the terminal-injection defense
+  return s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g, "").replace(/[\r\n\t]/g, " ");
 }
 
 export function sortByPriority(tasks: Task[]): Task[] {
@@ -74,9 +73,7 @@ export function formatTaskTable(tasks: Task[]): string {
   return [header, divider, ...rows].join("\n");
 }
 
-export function formatStaleTable(
-  items: Array<{ task: Task; ageDays: number }>
-): string {
+export function formatStaleTable(items: Array<{ task: Task; ageDays: number }>): string {
   if (items.length === 0) return "No stale tasks found.";
 
   const maxIdLen = Math.max(4, ...items.map(({ task }) => task.id.length));

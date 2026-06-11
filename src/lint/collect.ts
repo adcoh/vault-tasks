@@ -76,7 +76,7 @@ export function walkMarkdown(
         continue;
       }
 
-      let st;
+      let st: ReturnType<typeof lstatSync>;
       try {
         st = lstatSync(abs);
       } catch {
@@ -146,7 +146,7 @@ export function readVaultFiles(
     const normalised = text.replace(/\r\n/g, "\n");
     const { meta, body } = parseFrontmatter(normalised);
     const hasFrontmatter = Object.keys(meta).length > 0 || normalised.startsWith("---\n");
-    const hasTagsField = Object.prototype.hasOwnProperty.call(meta, "tags");
+    const hasTagsField = Object.hasOwn(meta, "tags");
     const titleRaw = meta["title"];
     const title = typeof titleRaw === "string" && titleRaw.length > 0 ? titleRaw : null;
 
@@ -236,6 +236,7 @@ export function collectWikilinks(
       const cleaned = raw.replace(INLINE_CODE_RE, "");
       WIKILINK_RE.lastIndex = 0;
       let m: RegExpExecArray | null;
+      // biome-ignore lint/suspicious/noAssignInExpressions: canonical global-regex exec() iteration idiom
       while ((m = WIKILINK_RE.exec(cleaned)) !== null) {
         const target = stripTargetSuffixes(m[1]);
         if (!target) continue;

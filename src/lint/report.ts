@@ -32,10 +32,11 @@ export function formatHumanReport(report: LintReport): string {
   if (report.leverageFixes.length > 0) {
     out.push(`=== HIGH-LEVERAGE FIXES (${report.leverageFixes.length}) ===`);
     for (const fix of report.leverageFixes) {
-      const aliasList = fix.aliases.length === 1
-        ? `[${fix.aliases[0]}]`
-        : `[${fix.aliases.join(", ")}]`;
-      out.push(`  ${fix.action}: aliases ${aliasList}  closes ${fix.closes} broken link${fix.closes === 1 ? "" : "s"}`);
+      const aliasList =
+        fix.aliases.length === 1 ? `[${fix.aliases[0]}]` : `[${fix.aliases.join(", ")}]`;
+      out.push(
+        `  ${fix.action}: aliases ${aliasList}  closes ${fix.closes} broken link${fix.closes === 1 ? "" : "s"}`
+      );
     }
     out.push("");
   }
@@ -48,7 +49,9 @@ export function formatHumanReport(report: LintReport): string {
         `    suggest: ${sugg.filePath}  (sim ${formatSimilarity(sugg.similarity)}, ${sugg.kind} "${sugg.candidate}")`
       );
       if (sugg.kind !== "alias") {
-        out.push(`      → adding \`aliases: [${sugg.proposedAlias}]\` to that file would close all ${entry.count}`);
+        out.push(
+          `      → adding \`aliases: [${sugg.proposedAlias}]\` to that file would close all ${entry.count}`
+        );
       }
     }
     const limit = MAX_LOCATIONS_PER_TARGET;

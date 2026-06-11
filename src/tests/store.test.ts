@@ -173,10 +173,7 @@ describe("TaskStore", () => {
     // `created`, `source` must come before any extra key after an update.
     const task = store.create({ title: "Order check" });
     const content = readFileSync(task.filePath, "utf-8");
-    const modified = content.replace(
-      "\n---\n",
-      "\noncall_fix_kind: real-bug\n---\n"
-    );
+    const modified = content.replace("\n---\n", "\noncall_fix_kind: real-bug\n---\n");
     writeFileSync(task.filePath, modified);
 
     store.update("1", { priority: "high" });
@@ -215,7 +212,7 @@ describe("TaskStore", () => {
 
   it("findIncludingArchive returns archived tasks without throwing", () => {
     store.create({ title: "Active task" });
-    const archived = store.create({ title: "To archive" });
+    const _archived = store.create({ title: "To archive" });
     store.setStatus("2", "done");
     const t = store.findIncludingArchive("2");
     assert.equal(t.title, "To archive");
@@ -378,10 +375,7 @@ describe("TaskStore", () => {
     const recent = store.loadRecent(3);
     assert.equal(recent.length, 3);
     // Sequential IDs: 0008, 0009, 0010 are newest
-    assert.deepEqual(
-      recent.map((t) => t.id).sort(),
-      ["0008", "0009", "0010"]
-    );
+    assert.deepEqual(recent.map((t) => t.id).sort(), ["0008", "0009", "0010"]);
   });
 
   it("loadRecent with limit=0 returns all tasks", () => {
@@ -406,19 +400,13 @@ describe("parseTaskIdFromFilename", () => {
   });
 
   it("accepts 14-digit timestamp filenames", () => {
-    assert.equal(
-      parseTaskIdFromFilename("20260413120000-title.md"),
-      "20260413120000"
-    );
+    assert.equal(parseTaskIdFromFilename("20260413120000-title.md"), "20260413120000");
   });
 
   it("rejects ULIDs containing excluded chars (I/L/O/U)", () => {
     // 26 chars but includes forbidden letters — must be rejected to keep
     // lookup/list behavior consistent with the ULID generator's strictness.
-    assert.equal(
-      parseTaskIdFromFilename("01ARZ3NDLKTSV4RRGSSFQ9XNHY-x.md"),
-      null
-    );
+    assert.equal(parseTaskIdFromFilename("01ARZ3NDLKTSV4RRGSSFQ9XNHY-x.md"), null);
   });
 
   it("rejects non-task markdown filenames", () => {

@@ -39,7 +39,7 @@ archive_dir = "archive"`);
   });
 
   it("skips comments", () => {
-    const result = parseToml("# comment\nname = \"test\"");
+    const result = parseToml('# comment\nname = "test"');
     assert.equal(result["name"], "test");
   });
 
@@ -80,7 +80,7 @@ archive_dir = "archive"`);
   });
 
   it("handles CRLF line endings", () => {
-    const result = parseToml("[paths]\r\nbacklog_dir = \"backlog\"\r\narchive_dir = \"archive\"");
+    const result = parseToml('[paths]\r\nbacklog_dir = "backlog"\r\narchive_dir = "archive"');
     const paths = result["paths"] as Record<string, unknown>;
     assert.equal(paths["backlog_dir"], "backlog");
     assert.equal(paths["archive_dir"], "archive");
@@ -107,7 +107,7 @@ archive_dir = "archive"`);
     // The regex requires .+ after =, so this line is simply skipped
     const result = parseToml("[task]\nname = ");
     // name = " " matches the regex with rawValue = "", which becomes empty string
-    const task = result["task"] as Record<string, unknown>;
+    const _task = result["task"] as Record<string, unknown>;
     // The behavior depends on the regex — if it doesn't match, the key is skipped
     assert.ok(true); // Just verify no crash
   });
@@ -154,7 +154,10 @@ describe("loadConfig", () => {
 
   it("resolves paths from config file location", () => {
     const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
-    writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\nbacklog_dir = "tasks"\narchive_dir = "done"');
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[paths]\nbacklog_dir = "tasks"\narchive_dir = "done"'
+    );
     const config = loadConfig(dir);
     assert.equal(config.vaultRoot, dir);
     assert.equal(config.backlogDir, join(dir, "tasks"));
@@ -163,7 +166,10 @@ describe("loadConfig", () => {
 
   it("resolves custom vault structure paths from config", () => {
     const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
-    writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\njournal_dir = "journal"\nprojects_dir = "projects"\nevergreen_dir = "notes"');
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[paths]\njournal_dir = "journal"\nprojects_dir = "projects"\nevergreen_dir = "notes"'
+    );
     const config = loadConfig(dir);
     assert.equal(config.journalDir, join(dir, "journal"));
     assert.equal(config.projectsDir, join(dir, "projects"));

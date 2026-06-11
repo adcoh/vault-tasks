@@ -43,5 +43,12 @@ export type {
 export type { SearchHit, SearchMode, SearchOptions } from "./search/types.js";
 export type { SearchConfig, EmbeddingProvider } from "./config.js";
 export { EMBEDDING_PROVIDERS } from "./config.js";
-export { searchTasks, similarTasks, BM25Index, VectorIndex, EmbedCache, createEmbedder } from "./search/index.js";
+export {
+  searchTasks,
+  similarTasks,
+  BM25Index,
+  VectorIndex,
+  EmbedCache,
+  createEmbedder,
+} from "./search/index.js";
 export type { Embedder } from "./search/index.js";

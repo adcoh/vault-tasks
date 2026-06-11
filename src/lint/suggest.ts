@@ -16,13 +16,7 @@
  */
 
 import { similarity } from "../similarity.js";
-import type {
-  BrokenEntry,
-  LeverageFix,
-  ResolutionIndex,
-  Suggestion,
-  VaultFile,
-} from "./types.js";
+import type { BrokenEntry, LeverageFix, ResolutionIndex, Suggestion, VaultFile } from "./types.js";
 
 interface Candidate {
   text: string;

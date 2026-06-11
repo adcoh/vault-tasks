@@ -31,7 +31,7 @@ export class VectorIndex {
       if (v.length !== this.dim) {
         throw new Error(
           `Vector dimension mismatch at item ${i}: expected ${this.dim}, got ${v.length}. ` +
-          `The embedding cache may be from a different model — delete .vault-tasks/embeddings.json.`
+            `The embedding cache may be from a different model — delete .vault-tasks/embeddings.json.`
         );
       }
       this.vectors.push(normalize(v, i));

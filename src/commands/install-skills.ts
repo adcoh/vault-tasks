@@ -1,11 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Config } from "../config.js";
@@ -19,7 +12,7 @@ const __dirname = dirname(__filename);
 function getTemplatesDir(): string {
   const envOverride = process.env.VAULT_TASKS_TEMPLATES_DIR;
   if (envOverride) {
-    let stat;
+    let stat: ReturnType<typeof statSync>;
     try {
       stat = statSync(envOverride);
     } catch {
@@ -38,9 +31,7 @@ function getTemplatesDir(): string {
   const packageRoot = resolve(__dirname, "..", "..");
   const templatesDir = join(packageRoot, "templates");
   if (!existsSync(templatesDir)) {
-    throw new Error(
-      "Cannot find templates directory. Is the package installed correctly?"
-    );
+    throw new Error("Cannot find templates directory. Is the package installed correctly?");
   }
   return templatesDir;
 }
@@ -133,7 +124,9 @@ export function cmdInstallSkills(
   if (!args.install) {
     console.log("Usage: vt install-skills --install  Install all skills, rules, and templates");
     console.log("       vt install-skills --list   List available templates");
-    console.log("       vt install-skills --update Overwrite existing base files (preserves .local.md)");
+    console.log(
+      "       vt install-skills --update Overwrite existing base files (preserves .local.md)"
+    );
     return;
   }
 
@@ -161,9 +154,7 @@ export function cmdInstallSkills(
     installed++;
   }
 
-  console.log(
-    `\n${installed} installed, ${skipped} skipped (already exist).`
-  );
+  console.log(`\n${installed} installed, ${skipped} skipped (already exist).`);
 
   if (installed > 0) {
     console.log("\nNote: You can customize any skill by creating a SKILL.local.md");

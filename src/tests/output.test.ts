@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { sortByPriority, formatTaskTable, formatStaleTable, formatTagList, formatSearchHits, sanitizeForDisplay } from "../output.js";
+import {
+  sortByPriority,
+  formatTaskTable,
+  formatStaleTable,
+  formatTagList,
+  formatSearchHits,
+  sanitizeForDisplay,
+} from "../output.js";
 import type { Task } from "../task.js";
 import type { SearchHit } from "../search/types.js";
 
@@ -55,10 +62,7 @@ describe("sortByPriority", () => {
   });
 
   it("does not mutate original array", () => {
-    const tasks = [
-      makeTask({ priority: "low" }),
-      makeTask({ priority: "high" }),
-    ];
+    const tasks = [makeTask({ priority: "low" }), makeTask({ priority: "high" })];
     const original = [...tasks];
     sortByPriority(tasks);
     assert.equal(tasks[0].priority, original[0].priority);
@@ -107,7 +111,10 @@ describe("formatTagList", () => {
   });
 
   it("sorts tags alphabetically", () => {
-    const tags = new Map([["zebra", 1], ["alpha", 2]]);
+    const tags = new Map([
+      ["zebra", 1],
+      ["alpha", 2],
+    ]);
     const result = formatTagList(tags);
     const lines = result.split("\n");
     assert.ok(lines[0].includes("alpha"));
@@ -164,7 +171,10 @@ describe("formatSearchHits", () => {
       mode: "bm25",
     };
     const result = formatSearchHits([hit]);
-    assert.ok(!result.includes("\x1b"), `escape sequence must be stripped: ${JSON.stringify(result)}`);
+    assert.ok(
+      !result.includes("\x1b"),
+      `escape sequence must be stripped: ${JSON.stringify(result)}`
+    );
     assert.ok(result.includes("Injected"));
   });
 
@@ -176,7 +186,10 @@ describe("formatSearchHits", () => {
     };
     const result = formatSearchHits([hit]);
     // The output is header + divider + one row — no forged row.
-    const taskRows = result.split("\n").filter((l) => /^\S/.test(l)).slice(2);
+    const taskRows = result
+      .split("\n")
+      .filter((l) => /^\S/.test(l))
+      .slice(2);
     assert.equal(taskRows.length, 1);
     assert.ok(!result.includes("\n0099"));
   });
@@ -190,7 +203,10 @@ describe("formatSearchHits", () => {
       mode: "bm25",
     };
     const result = formatSearchHits([hit]);
-    const taskRows = result.split("\n").filter((l) => /^\S/.test(l)).slice(2);
+    const taskRows = result
+      .split("\n")
+      .filter((l) => /^\S/.test(l))
+      .slice(2);
     assert.equal(taskRows.length, 1, `forged row leaked via status column:\n${result}`);
     assert.ok(!result.includes("\n0099"));
   });

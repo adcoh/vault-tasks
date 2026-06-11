@@ -197,7 +197,7 @@ export function findConfigFile(startDir: string = process.cwd()): string | null 
 export function parseToml(text: string): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   let currentSection: Record<string, unknown> = result;
-  let currentSectionPath: string[] = [];
+  let _currentSectionPath: string[] = [];
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -209,7 +209,7 @@ export function parseToml(text: string): Record<string, unknown> {
     const sectionMatch = line.match(/^\[([^\]]+)\]$/);
     if (sectionMatch) {
       const parts = sectionMatch[1].split(".");
-      currentSectionPath = parts;
+      _currentSectionPath = parts;
 
       // Navigate/create nested objects
       let target = result;
@@ -247,8 +247,8 @@ export function parseToml(text: string): Record<string, unknown> {
         if (closeBracket < 0) {
           throw new Error(
             `Multi-line arrays are not supported. ` +
-            `Key "${key}" has an opening "[" but no closing "]" on the same line. ` +
-            `Please use single-line arrays, e.g.: ${key} = ["a", "b"]`
+              `Key "${key}" has an opening "[" but no closing "]" on the same line. ` +
+              `Please use single-line arrays, e.g.: ${key} = ["a", "b"]`
           );
         }
         rawValue = rawValue.slice(0, closeBracket + 1).trim();
@@ -267,9 +267,7 @@ export function parseToml(text: string): Record<string, unknown> {
         if (inner === "") {
           value = [];
         } else {
-          value = inner
-            .split(",")
-            .map((v) => v.trim().replace(/^["']|["']$/g, ""));
+          value = inner.split(",").map((v) => v.trim().replace(/^["']|["']$/g, ""));
         }
       }
       // Boolean
@@ -383,11 +381,14 @@ export function loadConfig(startDir?: string): Config {
   let idStrategy: IdStrategy;
   let inferredPadWidth: number | null = null;
   if (rawStrategy !== undefined) {
-    if (typeof rawStrategy !== "string" || !(ID_STRATEGIES as readonly string[]).includes(rawStrategy)) {
+    if (
+      typeof rawStrategy !== "string" ||
+      !(ID_STRATEGIES as readonly string[]).includes(rawStrategy)
+    ) {
       throw new Error(
         `Invalid [id] strategy: ${JSON.stringify(rawStrategy)}. ` +
-        `Must be one of: ${ID_STRATEGIES.join(", ")}. ` +
-        `Edit ${configFile} to fix.`
+          `Must be one of: ${ID_STRATEGIES.join(", ")}. ` +
+          `Edit ${configFile} to fix.`
       );
     }
     idStrategy = rawStrategy as IdStrategy;
@@ -411,7 +412,7 @@ export function loadConfig(startDir?: string): Config {
     if (!Number.isFinite(n) || n < 0 || n > 1) {
       throw new Error(
         `Invalid [task] dedupe_threshold: ${JSON.stringify(rawThreshold)}. ` +
-        `Must be a number between 0 and 1.`
+          `Must be a number between 0 and 1.`
       );
     }
     dedupeThreshold = n;
@@ -424,7 +425,7 @@ export function loadConfig(startDir?: string): Config {
     if (!Number.isInteger(n) || n < 0) {
       throw new Error(
         `Invalid [task] dedupe_scan_limit: ${JSON.stringify(rawScanLimit)}. ` +
-        `Must be a non-negative integer.`
+          `Must be a non-negative integer.`
       );
     }
     dedupeScanLimit = n;
@@ -446,7 +447,9 @@ export function loadConfig(startDir?: string): Config {
     idStrategy,
     padWidth:
       (id["pad_width"] as number) ??
-      (inferredPadWidth !== null ? Math.max(inferredPadWidth, DEFAULTS.padWidth) : DEFAULTS.padWidth),
+      (inferredPadWidth !== null
+        ? Math.max(inferredPadWidth, DEFAULTS.padWidth)
+        : DEFAULTS.padWidth),
     slugMaxLength: (slug["max_length"] as number) ?? DEFAULTS.slugMaxLength,
     dedupeThreshold,
     dedupeScanLimit,
@@ -471,7 +474,7 @@ function mergeSearchConfig(search: Record<string, unknown>): SearchConfig {
     ) {
       throw new Error(
         `Invalid [search] embedding_provider: ${JSON.stringify(rawProvider)}. ` +
-        `Must be one of: ${EMBEDDING_PROVIDERS.join(", ")}.`
+          `Must be one of: ${EMBEDDING_PROVIDERS.join(", ")}.`
       );
     }
     embeddingProvider = rawProvider as EmbeddingProvider;
@@ -495,7 +498,7 @@ function mergeSearchConfig(search: Record<string, unknown>): SearchConfig {
     if (!Number.isSafeInteger(n) || n <= 0) {
       throw new Error(
         `Invalid [search] embedding_dimensions: ${JSON.stringify(rawDimensions)}. ` +
-        `Must be a positive integer.`
+          `Must be a positive integer.`
       );
     }
     embeddingDimensions = n;
@@ -519,7 +522,7 @@ function mergeSearchConfig(search: Record<string, unknown>): SearchConfig {
     if (typeof rawKeyEnv !== "string") {
       throw new Error(
         `Invalid [search] embedding_api_key_env: ${JSON.stringify(rawKeyEnv)}. ` +
-        `Must be the NAME of an environment variable (not the key itself).`
+          `Must be the NAME of an environment variable (not the key itself).`
       );
     }
     embeddingApiKeyEnv = rawKeyEnv.trim();
@@ -558,7 +561,7 @@ function mergeLintConfig(
     if (!Number.isFinite(n) || n < 0 || n > 1) {
       throw new Error(
         `Invalid [lint] suggestion_threshold: ${JSON.stringify(rawThreshold)}. ` +
-        `Must be a number between 0 and 1.`
+          `Must be a number between 0 and 1.`
       );
     }
     suggestionThreshold = n;
@@ -586,7 +589,7 @@ function mergeLintConfig(
     } catch (err) {
       throw new Error(
         `Invalid [lint] template_patterns[${i}]: ${JSON.stringify(p)}. ` +
-        `${(err as Error).message}`
+          `${(err as Error).message}`
       );
     }
   });
@@ -594,8 +597,14 @@ function mergeLintConfig(
   return {
     referenceDir,
     referenceExclude: asStringArray(lint["reference_exclude"], DEFAULT_LINT.referenceExclude),
-    templateSourceDirs: asStringArray(lint["template_source_dirs"], DEFAULT_LINT.templateSourceDirs),
-    templateSourceFiles: asStringArray(lint["template_source_files"], DEFAULT_LINT.templateSourceFiles),
+    templateSourceDirs: asStringArray(
+      lint["template_source_dirs"],
+      DEFAULT_LINT.templateSourceDirs
+    ),
+    templateSourceFiles: asStringArray(
+      lint["template_source_files"],
+      DEFAULT_LINT.templateSourceFiles
+    ),
     templatePatterns,
     skipDirs: asStringArray(lint["skip_dirs"], DEFAULT_LINT.skipDirs),
     evergreenConventions: {

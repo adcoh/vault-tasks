@@ -16,14 +16,7 @@ import { parseFrontmatter, writeFrontmatter } from "./frontmatter.js";
 import { slugify } from "./slugify.js";
 import type { CreateTaskOpts, Task } from "./task.js";
 
-const KNOWN_META_KEYS = new Set([
-  "title",
-  "status",
-  "priority",
-  "tags",
-  "created",
-  "source",
-]);
+const KNOWN_META_KEYS = new Set(["title", "status", "priority", "tags", "created", "source"]);
 
 // Strict ID prefix for a task filename. Matches:
 //   - Canonical ULID (26-char Crockford base32, no I/L/O/U)
@@ -132,9 +125,7 @@ export class TaskStore {
     const body = opts.body ?? `# ${title}\n\n`;
 
     if (!this.config.priorities.includes(priority)) {
-      throw new Error(
-        `Invalid priority: ${priority}. Use: ${this.config.priorities.join(", ")}`
-      );
+      throw new Error(`Invalid priority: ${priority}. Use: ${this.config.priorities.join(", ")}`);
     }
 
     const today = new Date().toISOString().slice(0, 10);
@@ -218,8 +209,8 @@ export class TaskStore {
       const names = matches.map((m) => basename(m));
       return new Error(
         `Ambiguous match for '${identifier}' — ${matches.length} candidates:\n` +
-        `${names.map((n) => `  ${n}`).join("\n")}\n` +
-        `Use more characters of the ID, or the full filename stem.`
+          `${names.map((n) => `  ${n}`).join("\n")}\n` +
+          `Use more characters of the ID, or the full filename stem.`
       );
     };
 
@@ -263,7 +254,7 @@ export class TaskStore {
       const upperIdent = identifier.toUpperCase();
       const prefixMatches = files.filter((f) => {
         const fileId = parseTaskIdFromFilename(basename(f));
-        return fileId !== null && fileId.toUpperCase().startsWith(upperIdent);
+        return fileId?.toUpperCase().startsWith(upperIdent);
       });
       if (prefixMatches.length === 1) {
         return fileToTask(prefixMatches[0], readFileSync(prefixMatches[0], "utf-8"));
@@ -396,9 +387,7 @@ export class TaskStore {
     for (const task of openTasks) {
       if (!task.created || !/^\d{4}-\d{2}-\d{2}/.test(task.created)) continue;
       const created = new Date(task.created);
-      const age = Math.floor(
-        (today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      const age = Math.floor((today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
       if (age < days) continue;
       candidates.push({ task, ageDays: age });
       if (!earliestDate || task.created < earliestDate) {
@@ -443,9 +432,7 @@ export class TaskStore {
 
   archiveCompleted(): Task[] {
     const tasks = this.loadAll();
-    const toArchive = tasks.filter((t) =>
-      this.config.archiveStatuses.includes(t.status)
-    );
+    const toArchive = tasks.filter((t) => this.config.archiveStatuses.includes(t.status));
 
     if (toArchive.length === 0) return [];
     this.ensureArchiveDir();
@@ -475,7 +462,9 @@ export class TaskStore {
     const name = basename(task.filePath);
     const dest = join(this.config.archiveDir, name);
     if (existsSync(dest)) {
-      throw new Error(`Archive destination already exists: ${name}. Resolve the conflict manually.`);
+      throw new Error(
+        `Archive destination already exists: ${name}. Resolve the conflict manually.`
+      );
     }
     renameSync(task.filePath, dest);
     task.filePath = dest;

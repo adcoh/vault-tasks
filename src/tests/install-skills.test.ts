@@ -1,12 +1,6 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  existsSync,
-} from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Config } from "../config.js";
@@ -92,14 +86,8 @@ describe("install-skills VAULT_TASKS_TEMPLATES_DIR override", () => {
       "# demo skill from override path\n"
     );
     mkdirSync(join(templatesDir, "rules"), { recursive: true });
-    writeFileSync(
-      join(templatesDir, "rules", "demo.md"),
-      "# demo rule from override path\n"
-    );
-    writeFileSync(
-      join(templatesDir, "backlog.base"),
-      "filters:\n  folder: '{{backlog_dir}}'\n"
-    );
+    writeFileSync(join(templatesDir, "rules", "demo.md"), "# demo rule from override path\n");
+    writeFileSync(join(templatesDir, "backlog.base"), "filters:\n  folder: '{{backlog_dir}}'\n");
   });
 
   afterEach(() => {
@@ -122,18 +110,9 @@ describe("install-skills VAULT_TASKS_TEMPLATES_DIR override", () => {
     captureLogs(() => {
       cmdInstallSkills(makeConfig(vaultRoot), { install: true });
     });
-    const installedSkill = join(
-      vaultRoot,
-      ".claude",
-      "skills",
-      "demo",
-      "SKILL.md"
-    );
+    const installedSkill = join(vaultRoot, ".claude", "skills", "demo", "SKILL.md");
     assert.ok(existsSync(installedSkill), "skill should be installed in vault");
-    assert.equal(
-      readFileSync(installedSkill, "utf-8"),
-      "# demo skill from override path\n"
-    );
+    assert.equal(readFileSync(installedSkill, "utf-8"), "# demo skill from override path\n");
     const installedBase = join(vaultRoot, "backlog", "backlog.base");
     assert.ok(existsSync(installedBase), "base file should be installed");
     assert.match(readFileSync(installedBase, "utf-8"), /folder: 'backlog'/);
@@ -148,10 +127,7 @@ describe("install-skills VAULT_TASKS_TEMPLATES_DIR override", () => {
       },
       (err: Error) => {
         assert.match(err.message, /VAULT_TASKS_TEMPLATES_DIR/);
-        assert.ok(
-          err.message.includes(missing),
-          "error must include the offending path"
-        );
+        assert.ok(err.message.includes(missing), "error must include the offending path");
         assert.match(err.message, /does not exist/);
         assert.match(err.message, /Unset it or point it/);
         return true;
@@ -169,10 +145,7 @@ describe("install-skills VAULT_TASKS_TEMPLATES_DIR override", () => {
       },
       (err: Error) => {
         assert.match(err.message, /VAULT_TASKS_TEMPLATES_DIR/);
-        assert.ok(
-          err.message.includes(filePath),
-          "error must include the offending path"
-        );
+        assert.ok(err.message.includes(filePath), "error must include the offending path");
         assert.match(err.message, /not a directory/);
         return true;
       }

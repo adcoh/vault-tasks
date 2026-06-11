@@ -96,10 +96,16 @@ describe("EmbedCache", () => {
 
   it("invalidates the whole cache when the model changes", async () => {
     const first = trackingEmbedder("model-a");
-    await new EmbedCache(dir, "ollama", "model-a").getOrCompute([task("1", "alpha")], first.embedder);
+    await new EmbedCache(dir, "ollama", "model-a").getOrCompute(
+      [task("1", "alpha")],
+      first.embedder
+    );
 
     const second = trackingEmbedder("model-b");
-    await new EmbedCache(dir, "ollama", "model-b").getOrCompute([task("1", "alpha")], second.embedder);
+    await new EmbedCache(dir, "ollama", "model-b").getOrCompute(
+      [task("1", "alpha")],
+      second.embedder
+    );
     assert.equal(second.calls.length, 1, "a different model must not reuse cached vectors");
   });
 

@@ -2,7 +2,7 @@
  * Convert a title to a kebab-case slug, truncated at word boundaries.
  */
 export function slugify(title: string, maxLength = 60): string {
-  let slug = title
+  const slug = title
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-]/g, "")

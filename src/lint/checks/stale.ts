@@ -37,10 +37,7 @@ export function findStaleReferences(
       if (!trimmed) return false;
       // Match the pattern as either a leading subdir (relative to the
       // reference root) or anywhere in the path.
-      return (
-        f.relPath.includes(`/${trimmed}/`) ||
-        f.relPath.startsWith(`${dirPrefix}/${trimmed}/`)
-      );
+      return f.relPath.includes(`/${trimmed}/`) || f.relPath.startsWith(`${dirPrefix}/${trimmed}/`);
     });
     if (excluded) continue;
 

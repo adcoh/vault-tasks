@@ -84,10 +84,7 @@ describe("VectorIndex", () => {
   });
 
   it("throws on a non-finite value in a corpus vector", () => {
-    assert.throws(
-      () => new VectorIndex([{ task: task("a"), vector: [1, NaN, 3] }]),
-      /Non-finite/
-    );
+    assert.throws(() => new VectorIndex([{ task: task("a"), vector: [1, NaN, 3] }]), /Non-finite/);
   });
 
   it("rejects a non-positive limit", () => {
