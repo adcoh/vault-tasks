@@ -44,7 +44,7 @@ jobs:
         with:
           name: package-tarball
           path: vault-tasks-*.tgz
-          retention-days: 1
+          retention-days: 7
 
   publish-npm:
     if: github.event_name == 'release'
@@ -58,6 +58,19 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+
+      # Trusted publisher auto-detection requires npm CLI >= 11.5.1
+      # (GA'd 2025-07-31). The npm bundled with actions/setup-node@v6 +
+      # Node 22 may be older than that — older CLIs sign provenance via
+      # OIDC but do NOT auto-authenticate via OIDC for the publish itself,
+      # producing a misleading `404 PUT /vault-tasks` from the registry's
+      # catch-all unauthenticated-write path. Pin to the ^11.5.1 range so
+      # releases stay reproducible (no surprise major bumps to npm 12.x)
+      # while still picking up patch fixes.
+      - name: Upgrade npm for Trusted Publishing
+        run: |
+          npm install -g 'npm@^11.5.1'
+          npm --version
 
       - name: Download artifact
         uses: actions/download-artifact@v8
