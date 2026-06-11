@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented here.
 
+## 0.6.0
+
+### Added
+
+- **Semantic & hybrid search.** `vt search --mode semantic` ranks tasks by
+  embedding cosine similarity; `vt search --mode hybrid` fuses BM25 and
+  semantic rankings with Reciprocal Rank Fusion. Both work with the positional
+  keyword and with `--like <id>`. `keyword` and `bm25` stay fully offline.
+- **Local-first embeddings, no API key.** The default engine talks to a local
+  [Ollama](https://ollama.com) server (`nomic-embed-text`); no task text leaves
+  the machine. `mxbai-embed-large` and `all-minilm` are documented presets, and
+  any model string is accepted. Configure under `[search]` in
+  `.vault-tasks.toml`.
+- **Pluggable providers.** `ollama` (default), `lmstudio`/`llamacpp`/
+  `openai-compatible` (local OpenAI-shaped servers), opt-in cloud (`openai`,
+  `voyage`, `gemini`), and an opt-in **in-process** engine
+  (`transformers`) backed by the `@huggingface/transformers`
+  `optionalDependency` — loaded via dynamic `import()` only when selected, so a
+  default install still pulls zero runtime dependencies.
+- **On-disk embedding cache** at `<vault>/.vault-tasks/embeddings.json`: only
+  new or changed tasks are re-embedded; a provider/model change invalidates it.
+- **Library exports**: `VectorIndex`, `EmbedCache`, `createEmbedder`,
+  `Embedder`, `EMBEDDING_PROVIDERS`, and the `semantic`/`hybrid` `SearchMode`s.
+
+### Security
+
+- Cloud API keys are read only from a named environment variable
+  (`embedding_api_key_env`); the key value is never stored in config or written
+  to disk. The embedding cache validates every vector (finite numbers, expected
+  dimensions) on load — no unsafe casts on disk or wire data — and writes
+  atomically inside the vault root.
+
 ## 0.5.1
 
 ### Fixed (CI / release plumbing only — no user-facing code changes)

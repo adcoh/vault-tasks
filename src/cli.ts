@@ -22,7 +22,7 @@ Usage: vt <command> [options]
 Commands:
   new <title>           Create a new task
   list                  List tasks
-  search <keyword>      Search tasks by title and body (--mode keyword|bm25, --like <id>, --limit N)
+  search <keyword>      Search tasks by title and body (--mode keyword|bm25|semantic|hybrid, --like <id>, --limit N)
   stale                 List stale open tasks
   show <id>             Show full task
   done <id>             Mark task as done
@@ -54,8 +54,8 @@ Options (vary by command):
   --json                Machine-readable lint output
   --quiet               Print only the lint SUMMARY line
   --no-suggestions      Skip "did you mean?" suggestions in lint
-  --mode                Search mode: keyword (default) or bm25
-  --like                Find tasks similar to <id> (requires --mode bm25)
+  --mode                Search mode: keyword (default), bm25, semantic, or hybrid
+  --like                Find tasks similar to <id> (requires --mode bm25|semantic|hybrid)
   --limit               Maximum number of search results
   --help, -h            Show this help message
 `;
@@ -103,7 +103,7 @@ const VALUE_FLAG_HINTS: Record<string, string> = {
   days: "a positive integer",
   only: "broken|orphans|stale|drift",
   scope: "a directory",
-  mode: "keyword or bm25",
+  mode: "keyword, bm25, semantic, or hybrid",
   like: "a task id (e.g. 0042 or 01HXY...)",
   limit: "a positive integer",
 };
@@ -338,8 +338,8 @@ async function main(): Promise<void> {
         if (!positional[0] && args["like"] === undefined) {
           console.error(
             "Usage:\n" +
-            "  vt search <keyword> [--all] [--mode keyword|bm25] [--limit N]\n" +
-            "  vt search --like <id> --mode bm25 [--all] [--limit N]"
+            "  vt search <keyword> [--all] [--mode keyword|bm25|semantic|hybrid] [--limit N]\n" +
+            "  vt search --like <id> --mode bm25|semantic|hybrid [--all] [--limit N]"
           );
           process.exitCode = 1;
           return;

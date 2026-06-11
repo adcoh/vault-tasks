@@ -57,7 +57,7 @@ vt done 1
 |---|---|
 | `vt new <title>` | Create a task. Options: `--priority`, `--tags`, `--source`, `--commit` |
 | `vt list` | List open tasks. Options: `--status`, `--priority`, `--tag`, `--all` |
-| `vt search <keyword>` | Search titles and body text. `--all` includes archived. `--mode bm25` ranks by relevance; `--like <id>` finds similar tasks; `--limit N` caps results |
+| `vt search <keyword>` | Search titles and body text. `--all` includes archived. `--mode keyword\|bm25\|semantic\|hybrid`; `--like <id>` finds similar tasks; `--limit N` caps results. See [Semantic search](#semantic-search) |
 | `vt show <id>` | Print full task file |
 | `vt start <id>` | Set status to `in-progress` |
 | `vt done <id>` | Set status to `done` (auto-archives) |
@@ -197,24 +197,70 @@ entry point is unaffected.
 
 ```typescript
 import { TaskStore, loadConfig } from "vault-tasks";
-import { searchTasks, similarTasks, BM25Index, tokenize } from "vault-tasks/search";
+import { searchTasks, similarTasks, BM25Index, VectorIndex, tokenize } from "vault-tasks/search";
 
 const store = new TaskStore(loadConfig());
 
 // Free-text query, ranked by BM25
 const hits = await searchTasks(store, "auth callback", { mode: "bm25", limit: 10 });
 
-// Tasks similar to a given task (by title + tags)
+// Vector similarity (uses the configured embedding engine)
+const semantic = await searchTasks(store, "login flow", { mode: "semantic" });
+
+// Tasks similar to a given task
 const target = store.findIncludingArchive("0042");
-const related = await similarTasks(store, target, { mode: "bm25" });
+const related = await similarTasks(store, target, { mode: "hybrid" });
 ```
 
-Available modes: `keyword` (substring matching across title, body, AND tags;
-priority-sorted; the default for both the CLI and `searchTasks`) and `bm25`
-(ranked by BM25 score; title-weighted document construction). Semantic and
-hybrid modes are planned and will require an optional embedder peer
-dependency; until then they are deliberately excluded from the `SearchMode`
-type so accidental use is a compile-time error rather than a runtime crash.
+Available modes:
+
+| Mode | Ranking | Needs an engine? |
+|---|---|---|
+| `keyword` (default) | substring match across title, body, AND tags; priority-sorted | no |
+| `bm25` | BM25 relevance, title-weighted | no |
+| `semantic` | cosine similarity over embeddings | yes |
+| `hybrid` | `bm25` + `semantic` fused with Reciprocal Rank Fusion | yes |
+
+## Semantic search
+
+`semantic` and `hybrid` modes rank tasks by meaning rather than shared words.
+They need an **embedding engine** to turn text into vectors; `keyword` and
+`bm25` never do and stay fully offline.
+
+**Local-first by default — no data leaves your machine, no API key.**
+vault-tasks talks to a local [Ollama](https://ollama.com) server:
+
+```bash
+ollama serve                      # start the local server
+ollama pull nomic-embed-text      # pull the default model (768 dims)
+vt search "auth redirect" --mode semantic
+vt search --like 0042 --mode hybrid
+```
+
+Vectors are cached at `<vault>/.vault-tasks/embeddings.json`, so only new or
+changed tasks are re-embedded on later runs. (Add that path to `.gitignore` if
+you don't want to commit it.)
+
+Configure the engine under `[search]` in `.vault-tasks.toml`:
+
+```toml
+[search]
+embedding_provider = "ollama"          # ollama | lmstudio | llamacpp | openai-compatible
+                                       # | transformers | openai | voyage | gemini
+embedding_model = "nomic-embed-text"   # also: mxbai-embed-large (1024d), all-minilm (384d)
+# embedding_endpoint = ""              # override server URL; empty = provider default
+```
+
+- **Other local servers**: set `embedding_provider` to `lmstudio` or `llamacpp`
+  (OpenAI-compatible `/v1/embeddings`); the default endpoints are
+  `http://localhost:1234` and `http://localhost:8080`.
+- **In-process, no server**: install the optional package and switch provider —
+  `npm i @huggingface/transformers`, then `embedding_provider = "transformers"`
+  with `embedding_model` set to a Hugging Face repo id. It's an
+  `optionalDependency`, so the core install stays dependency-free.
+- **Cloud (opt-in)**: `embedding_provider = "openai"` (or `voyage`/`gemini`).
+  The API **key** is read from an environment variable you name via
+  `embedding_api_key_env` — it is never stored in config or on disk.
 
 ## License
 

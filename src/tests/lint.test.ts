@@ -53,6 +53,13 @@ function makeConfig(dir: string, overrides: Partial<Config["lint"]> = {}): Confi
       suggestionThreshold: 0.6,
       ...overrides,
     },
+    search: {
+      embeddingProvider: "ollama",
+      embeddingModel: "nomic-embed-text",
+      embeddingDimensions: null,
+      embeddingEndpoint: "",
+      embeddingApiKeyEnv: "",
+    },
   };
 }
 

@@ -4,6 +4,50 @@ import { dirname, join, relative, resolve } from "node:path";
 export const ID_STRATEGIES = ["sequential", "timestamp", "ulid"] as const;
 export type IdStrategy = (typeof ID_STRATEGIES)[number];
 
+/**
+ * Embedding providers for semantic/hybrid search. Local-first: `ollama` is the
+ * default and needs no API key. `lmstudio`/`llamacpp`/`openai-compatible` speak
+ * the OpenAI `/v1/embeddings` shape against a local server. `transformers` runs
+ * weights in-process via an OPTIONAL dependency (see search/embeddings.ts).
+ * `openai`/`voyage`/`gemini` are opt-in cloud providers requiring an API key
+ * read from an environment variable — never stored in config.
+ */
+export const EMBEDDING_PROVIDERS = [
+  "ollama",
+  "lmstudio",
+  "llamacpp",
+  "openai-compatible",
+  "transformers",
+  "openai",
+  "voyage",
+  "gemini",
+] as const;
+export type EmbeddingProvider = (typeof EMBEDDING_PROVIDERS)[number];
+
+export interface SearchConfig {
+  /** One of EMBEDDING_PROVIDERS. Default "ollama". */
+  embeddingProvider: EmbeddingProvider;
+  /** Model name/tag passed to the provider. Default "nomic-embed-text". */
+  embeddingModel: string;
+  /**
+   * Expected vector dimensionality. When non-null, a vector of any other length
+   * (cached or freshly computed) is rejected — catches a silent model swap that
+   * would otherwise corrupt the cache. Auto-detected and left null by default.
+   */
+  embeddingDimensions: number | null;
+  /**
+   * Base URL of the embedding server. Empty string means "use the provider's
+   * built-in default" (e.g. http://localhost:11434 for ollama).
+   */
+  embeddingEndpoint: string;
+  /**
+   * Name of the environment variable holding the API key. The key VALUE is read
+   * from process.env at call time and is never persisted to config or disk.
+   * Only consulted by cloud providers.
+   */
+  embeddingApiKeyEnv: string;
+}
+
 export interface LintEvergreenConventions {
   requireFrontmatter: boolean;
   requireTitleField: boolean;
@@ -48,7 +92,16 @@ export interface Config {
     standardTags: string[];
   };
   lint: LintConfig;
+  search: SearchConfig;
 }
+
+const DEFAULT_SEARCH: SearchConfig = {
+  embeddingProvider: "ollama",
+  embeddingModel: "nomic-embed-text",
+  embeddingDimensions: null,
+  embeddingEndpoint: "",
+  embeddingApiKeyEnv: "",
+};
 
 export const DEFAULT_LINT_TEMPLATE_PATTERNS: readonly string[] = [
   "^YYYY",
@@ -106,6 +159,7 @@ const DEFAULTS: Config = {
     standardTags: [],
   },
   lint: DEFAULT_LINT,
+  search: DEFAULT_SEARCH,
 };
 
 const CONFIG_FILENAME = ".vault-tasks.toml";
@@ -281,6 +335,7 @@ export function loadConfig(startDir?: string): Config {
         ...DEFAULT_LINT,
         referenceDir: resolve(vaultRoot, DEFAULT_LINT.referenceDir),
       },
+      search: { ...DEFAULT_SEARCH },
     };
   }
 
@@ -296,6 +351,7 @@ export function loadConfig(startDir?: string): Config {
   const projectTags = (project["tags"] ?? {}) as Record<string, unknown>;
   const lint = (parsed["lint"] ?? {}) as Record<string, unknown>;
   const lintConventions = (lint["evergreen_conventions"] ?? {}) as Record<string, unknown>;
+  const search = (parsed["search"] ?? {}) as Record<string, unknown>;
 
   const backlogRel = (paths["backlog_dir"] as string) ?? DEFAULTS.backlogDir;
   const archiveRel = (paths["archive_dir"] as string) ?? DEFAULTS.archiveDir;
@@ -401,6 +457,80 @@ export function loadConfig(startDir?: string): Config {
       standardTags: (projectTags["standard"] as string[]) ?? [],
     },
     lint: mergeLintConfig(vaultRoot, lint, lintConventions),
+    search: mergeSearchConfig(search),
+  };
+}
+
+function mergeSearchConfig(search: Record<string, unknown>): SearchConfig {
+  const rawProvider = search["embedding_provider"];
+  let embeddingProvider = DEFAULT_SEARCH.embeddingProvider;
+  if (rawProvider !== undefined) {
+    if (
+      typeof rawProvider !== "string" ||
+      !(EMBEDDING_PROVIDERS as readonly string[]).includes(rawProvider)
+    ) {
+      throw new Error(
+        `Invalid [search] embedding_provider: ${JSON.stringify(rawProvider)}. ` +
+        `Must be one of: ${EMBEDDING_PROVIDERS.join(", ")}.`
+      );
+    }
+    embeddingProvider = rawProvider as EmbeddingProvider;
+  }
+
+  const rawModel = search["embedding_model"];
+  let embeddingModel = DEFAULT_SEARCH.embeddingModel;
+  if (rawModel !== undefined) {
+    if (typeof rawModel !== "string" || rawModel.trim() === "") {
+      throw new Error(
+        `Invalid [search] embedding_model: ${JSON.stringify(rawModel)}. Must be a non-empty string.`
+      );
+    }
+    embeddingModel = rawModel;
+  }
+
+  const rawDimensions = search["embedding_dimensions"];
+  let embeddingDimensions = DEFAULT_SEARCH.embeddingDimensions;
+  if (rawDimensions !== undefined) {
+    const n = typeof rawDimensions === "number" ? rawDimensions : Number(rawDimensions);
+    if (!Number.isSafeInteger(n) || n <= 0) {
+      throw new Error(
+        `Invalid [search] embedding_dimensions: ${JSON.stringify(rawDimensions)}. ` +
+        `Must be a positive integer.`
+      );
+    }
+    embeddingDimensions = n;
+  }
+
+  const rawEndpoint = search["embedding_endpoint"];
+  let embeddingEndpoint = DEFAULT_SEARCH.embeddingEndpoint;
+  if (rawEndpoint !== undefined) {
+    if (typeof rawEndpoint !== "string") {
+      throw new Error(
+        `Invalid [search] embedding_endpoint: ${JSON.stringify(rawEndpoint)}. Must be a string URL.`
+      );
+    }
+    // Strip a trailing slash so callers can append paths without doubling up.
+    embeddingEndpoint = rawEndpoint.trim().replace(/\/+$/, "");
+  }
+
+  const rawKeyEnv = search["embedding_api_key_env"];
+  let embeddingApiKeyEnv = DEFAULT_SEARCH.embeddingApiKeyEnv;
+  if (rawKeyEnv !== undefined) {
+    if (typeof rawKeyEnv !== "string") {
+      throw new Error(
+        `Invalid [search] embedding_api_key_env: ${JSON.stringify(rawKeyEnv)}. ` +
+        `Must be the NAME of an environment variable (not the key itself).`
+      );
+    }
+    embeddingApiKeyEnv = rawKeyEnv.trim();
+  }
+
+  return {
+    embeddingProvider,
+    embeddingModel,
+    embeddingDimensions,
+    embeddingEndpoint,
+    embeddingApiKeyEnv,
   };
 }
 
@@ -548,5 +678,35 @@ archive_dir = "archive"           # relative to backlog_dir
 # require_tags_field = true
 # require_related_section = true
 # require_body_wikilink = true
+
+# [search]
+# Semantic ("--mode semantic") and hybrid ("--mode hybrid") search need an
+# embedding engine. Keyword and bm25 modes work with no config and no network.
+#
+# Local-first by default: vault-tasks talks to a local Ollama server and no task
+# data ever leaves your machine. Start it with \`ollama serve\` and pull a model
+# with \`ollama pull nomic-embed-text\`.
+#
+# embedding_provider = "ollama"   # ollama | lmstudio | llamacpp | openai-compatible
+#                                 # | transformers | openai | voyage | gemini
+# embedding_model = "nomic-embed-text"   # local presets:
+#                                 #   nomic-embed-text   (768 dims, default)
+#                                 #   mxbai-embed-large  (1024 dims)
+#                                 #   all-minilm         (384 dims)
+# embedding_endpoint = ""         # override server URL; empty = provider default
+#                                 #   ollama   -> http://localhost:11434
+#                                 #   lmstudio -> http://localhost:1234
+#                                 #   llamacpp -> http://localhost:8080
+# embedding_dimensions = 0        # pin expected vector size (0/unset = auto-detect)
+#
+# In-process engine (no server) — opt in by installing the optional package:
+#   npm i @huggingface/transformers     # optional dependency, not installed by default
+# embedding_provider = "transformers"
+# embedding_model = "nomic-ai/nomic-embed-text-v1"   # a Hugging Face repo id
+#
+# Cloud providers (opt-in) — the API KEY is read from the named env var at run
+# time and is NEVER stored here. Set only the variable's name:
+# embedding_provider = "openai"
+# embedding_api_key_env = "OPENAI_API_KEY"
 `;
 }

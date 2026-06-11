@@ -5,7 +5,31 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Config } from "../config.js";
 import { TaskStore } from "../store.js";
-import { searchTasks, similarTasks } from "../search/index.js";
+import { searchTasks, similarTasks, tokenize } from "../search/index.js";
+import type { Embedder } from "../search/index.js";
+
+/**
+ * Deterministic bag-of-words embedder for tests: each token hashes into one of
+ * `dim` buckets. Texts that share tokens get similar vectors, so cosine ranking
+ * is meaningful without any network or model. No randomness — fully repeatable.
+ */
+function fakeEmbedder(dim = 64): Embedder {
+  return {
+    provider: "ollama",
+    model: "fake-test",
+    async embed(texts: string[]): Promise<number[][]> {
+      return texts.map((t) => {
+        const v = new Array<number>(dim).fill(0);
+        for (const tok of tokenize(t)) {
+          let h = 0;
+          for (let i = 0; i < tok.length; i++) h = (h * 31 + tok.charCodeAt(i)) >>> 0;
+          v[h % dim] += 1;
+        }
+        return v;
+      });
+    },
+  };
+}
 
 function makeConfig(dir: string): Config {
   return {
@@ -42,6 +66,13 @@ function makeConfig(dir: string): Config {
         requireBodyWikilink: true,
       },
       suggestionThreshold: 0.6,
+    },
+    search: {
+      embeddingProvider: "ollama",
+      embeddingModel: "nomic-embed-text",
+      embeddingDimensions: null,
+      embeddingEndpoint: "",
+      embeddingApiKeyEnv: "",
     },
   };
 }
@@ -107,12 +138,12 @@ describe("searchTasks", () => {
   });
 
   it("falls through to a clear error if mode is bypassed via a cast", async () => {
-    // SearchMode is narrowed to 'keyword' | 'bm25' at compile time, so this
-    // requires a deliberate cast. The runtime guards against future modes
-    // being added to the type without a handler.
+    // SearchMode is a closed union at compile time, so reaching the exhaustive
+    // guard requires a deliberate cast to an unknown mode. This protects against
+    // future modes being added to the type without a handler.
     store.create({ title: "Fix auth bug" });
     await assert.rejects(
-      () => searchTasks(store, "auth", { mode: "semantic" as unknown as "bm25" }),
+      () => searchTasks(store, "auth", { mode: "nonsense" as unknown as "bm25" }),
       /Unhandled search mode/
     );
   });
@@ -188,6 +219,136 @@ describe("similarTasks", () => {
   it("returns [] when the corpus is empty after excluding the target", async () => {
     const target = store.create({ title: "Only task" });
     const hits = await similarTasks(store, target, { mode: "bm25" });
+    assert.deepEqual(hits, []);
+  });
+});
+
+describe("searchTasks semantic / hybrid", () => {
+  let dir: string;
+  let store: TaskStore;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-search-sem-"));
+    store = new TaskStore(makeConfig(dir));
+  });
+
+  it("semantic mode ranks by vector similarity and tags hits as 'semantic'", async () => {
+    store.create({ title: "Fix auth redirect bug" });
+    store.create({ title: "Auth callback handling" });
+    store.create({ title: "Refactor database migration" });
+    const hits = await searchTasks(store, "auth login", {
+      mode: "semantic",
+      embedder: fakeEmbedder(),
+    });
+    assert.ok(hits.length >= 1);
+    assert.equal(hits[0].mode, "semantic");
+    assert.ok(
+      hits.some((h) => h.task.title.includes("auth") || h.task.title.includes("Auth")),
+      "an auth-related task should rank for an auth query"
+    );
+    assert.ok(
+      !hits.slice(0, 1).some((h) => h.task.title.includes("database")),
+      "the unrelated DB task should not be the top semantic hit"
+    );
+  });
+
+  it("semantic mode returns [] on an empty corpus without calling the embedder", async () => {
+    let called = false;
+    const embedder: Embedder = {
+      provider: "ollama",
+      model: "x",
+      async embed(t) {
+        called = true;
+        return t.map(() => [1]);
+      },
+    };
+    const hits = await searchTasks(store, "anything", { mode: "semantic", embedder });
+    assert.deepEqual(hits, []);
+    assert.equal(called, false);
+  });
+
+  it("hybrid mode fuses bm25 and semantic and tags hits as 'hybrid'", async () => {
+    store.create({ title: "Fix auth redirect bug", tags: ["auth"] });
+    store.create({ title: "Auth callback handling", tags: ["auth"] });
+    store.create({ title: "Refactor database migration" });
+    const hits = await searchTasks(store, "auth", {
+      mode: "hybrid",
+      embedder: fakeEmbedder(),
+    });
+    assert.ok(hits.length >= 1);
+    assert.equal(hits[0].mode, "hybrid");
+    // A task matching both lexically and semantically should outrank the
+    // unrelated DB task.
+    const dbIdx = hits.findIndex((h) => h.task.title.includes("database"));
+    const authIdx = hits.findIndex((h) => h.task.title.includes("auth") || h.task.title.includes("Auth"));
+    assert.ok(authIdx >= 0);
+    if (dbIdx >= 0) assert.ok(authIdx < dbIdx, "auth task should rank above the unrelated DB task");
+  });
+
+  it("reuses the on-disk cache: a second run only embeds the query", async () => {
+    store.create({ title: "Fix auth redirect bug" });
+    store.create({ title: "Auth callback handling" });
+
+    const batches: number[] = [];
+    const counting: Embedder = {
+      provider: "ollama",
+      model: "count",
+      async embed(texts) {
+        batches.push(texts.length);
+        return fakeEmbedder().embed(texts);
+      },
+    };
+
+    await searchTasks(store, "auth", { mode: "semantic", embedder: counting });
+    const afterFirst = batches.length;
+    await searchTasks(store, "auth", { mode: "semantic", embedder: counting });
+
+    // First run: one corpus batch (2 tasks) + one query batch (1). Second run:
+    // corpus served from cache, only the query is embedded.
+    const secondRunBatches = batches.slice(afterFirst);
+    assert.deepEqual(secondRunBatches, [1], "second run must embed only the query");
+  });
+});
+
+describe("similarTasks semantic / hybrid", () => {
+  let dir: string;
+  let store: TaskStore;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-similar-sem-"));
+    store = new TaskStore(makeConfig(dir));
+  });
+
+  it("semantic mode excludes the target and ranks related tasks", async () => {
+    const target = store.create({ title: "Fix auth redirect bug", tags: ["auth"] });
+    store.create({ title: "Fix auth callback handling", tags: ["auth"] });
+    store.create({ title: "Refactor database migration" });
+    const hits = await similarTasks(store, target, {
+      mode: "semantic",
+      embedder: fakeEmbedder(),
+    });
+    assert.ok(!hits.find((h) => h.task.filePath === target.filePath), "target must be excluded");
+    assert.ok(hits.length >= 1);
+    assert.equal(hits[0].task.title, "Fix auth callback handling");
+    assert.equal(hits[0].mode, "semantic");
+  });
+
+  it("hybrid mode excludes the target and fuses both rankings", async () => {
+    const target = store.create({ title: "Fix auth redirect bug", tags: ["auth"] });
+    store.create({ title: "Fix auth callback handling", tags: ["auth"] });
+    store.create({ title: "Refactor database migration" });
+    const hits = await similarTasks(store, target, {
+      mode: "hybrid",
+      embedder: fakeEmbedder(),
+    });
+    assert.ok(!hits.find((h) => h.task.filePath === target.filePath));
+    assert.equal(hits[0].task.title, "Fix auth callback handling");
+    assert.equal(hits[0].mode, "hybrid");
+  });
+
+  it("semantic similarity returns [] when only the target exists", async () => {
+    const target = store.create({ title: "Only task" });
+    const hits = await similarTasks(store, target, { mode: "semantic", embedder: fakeEmbedder() });
     assert.deepEqual(hits, []);
   });
 });

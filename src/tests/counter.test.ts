@@ -42,6 +42,13 @@ function makeConfig(dir: string, strategy: Config["idStrategy"] = "sequential"):
       },
       suggestionThreshold: 0.6,
     },
+    search: {
+      embeddingProvider: "ollama",
+      embeddingModel: "nomic-embed-text",
+      embeddingDimensions: null,
+      embeddingEndpoint: "",
+      embeddingApiKeyEnv: "",
+    },
   };
 }
 
