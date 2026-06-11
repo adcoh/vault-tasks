@@ -13,7 +13,11 @@ Every feature here exists because I hit a wall using it on real work and filed a
 Dogfooded across real projects (400+ tasks tracked, ~190 closed); every release written by use, not a spec.
 
 - **The story:** _"I didn't build the Agent-Ready Vault Kit. My agent did."_ — article _(coming)_
-- **Done-for-you setup:** the **[Agent-Ready Vault Kit](https://agentvaultkit.gumroad.com/l/iueeo)** wraps `vt` + an opinionated Obsidian vault (PARA + zettelkasten, agent-neutral `.agent/` substrate, agent skills, a Hermes profile starter) into a $19 one-time starter. `vt` stays free and MIT — the Kit is just the curated setup. _(launching soon)_
+- **Done-for-you setup:** the **[Agent-Ready Vault Kit](https://agentvaultkit.gumroad.com/l/iueeo)** wraps `vt` + an opinionated Obsidian vault (PARA + zettelkasten, agent-neutral `.agent/` substrate, agent skills, a Hermes profile starter). **Pay what you want — including free.** `vt` and the Kit are both free; tip if it's useful. _(launching soon)_
+
+## Support
+
+`vt` is free and MIT, and stays that way. If it saves you time, you can back its development via [GitHub Sponsors](https://github.com/sponsors/adcoh) — sponsors get early access to new features and a spot on the backers list. _(sponsor tiers coming)_
 
 ## Install
 
