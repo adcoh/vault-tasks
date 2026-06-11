@@ -21,7 +21,7 @@ const CACHE_VERSION = 1;
 
 // Bound the text embedded per task, mirroring BM25's MAX_DOC_CHARS. A multi-MB
 // task body (pasted log, minified blob) would otherwise inflate every request.
-const MAX_TEXT_CHARS = 2_000_000;
+export const MAX_TEXT_CHARS = 2_000_000;
 
 interface CacheFile {
   version: number;
@@ -167,9 +167,14 @@ export class EmbedCache {
   }
 }
 
-function embedText(task: Task): string {
-  const text = `${task.title}\n${task.tags.join(" ")}\n${task.body}`;
+/** Truncate text to the per-embedding character bound (see {@link MAX_TEXT_CHARS}). */
+export function capEmbeddingText(text: string): string {
   return text.length > MAX_TEXT_CHARS ? text.slice(0, MAX_TEXT_CHARS) : text;
+}
+
+/** Build the capped document text embedded for a task: title, tags, body. */
+export function embedText(task: Task): string {
+  return capEmbeddingText(`${task.title}\n${task.tags.join(" ")}\n${task.body}`);
 }
 
 /** Validate a freshly computed vector — a violation here is a bug, so throw. */

@@ -98,6 +98,11 @@ const PROVIDER_SPECS: Record<EmbeddingProvider, ProviderSpec> = {
 // Chunking bounds request size and per-request latency.
 const MAX_BATCH = 64;
 
+// Per-request timeout for embedding HTTP calls. Without it, a blackholed
+// endpoint (no response, no TCP reset) leaves the CLI hanging until the OS
+// socket timeout — minutes — with no actionable feedback.
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export interface Embedder {
   readonly provider: EmbeddingProvider;
   readonly model: string;
@@ -179,18 +184,29 @@ async function embedInBatches(
 
 async function postJson(url: string, body: unknown, headers: Record<string, string>, spec: ProviderSpec): Promise<unknown> {
   let res: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
   } catch (err) {
     const hint = spec.startHint ? ` — ${spec.startHint}` : "";
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(
+        `${spec.label} timed out after ${REQUEST_TIMEOUT_MS / 1000}s at ${url}${hint}. ` +
+        `Check the endpoint is reachable, or set [search] embedding_provider.`
+      );
+    }
     throw new Error(
       `${spec.label} not reachable at ${url}${hint}, or set [search] embedding_provider. ` +
       `(${(err as Error).message})`
     );
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     let detail = "";

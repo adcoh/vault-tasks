@@ -109,6 +109,18 @@ describe("createEmbedder", () => {
     await assert.rejects(() => emb.embed(["x"]), /Ollama not reachable/);
   });
 
+  it("surfaces an actionable timeout error when the request aborts", async () => {
+    // fetch() rejects with an AbortError-named error when the signal fires;
+    // simulate that directly so the assertion stays deterministic (no 30s wait).
+    stubFetch(() => {
+      const err = new Error("This operation was aborted");
+      err.name = "AbortError";
+      return err;
+    });
+    const emb = createEmbedder(cfg({ embeddingProvider: "ollama" }));
+    await assert.rejects(() => emb.embed(["x"]), /timed out after 30s/);
+  });
+
   it("throws on a non-2xx response, surfacing the status", async () => {
     stubFetch(() => ({ status: 500, statusText: "Internal Server Error", text: "boom" }));
     const emb = createEmbedder(cfg({ embeddingProvider: "ollama" }));
@@ -125,6 +137,28 @@ describe("createEmbedder", () => {
     stubFetch(() => ({ json: { embeddings: [["not a number"]] } }));
     const emb = createEmbedder(cfg({ embeddingProvider: "ollama" }));
     await assert.rejects(() => emb.embed(["x"]), /non-finite/);
+  });
+
+  // The string case above trips the `typeof` guard before Number.isFinite;
+  // these two exercise the numeric branch (Infinity/NaN are `typeof "number"`).
+  it("throws on Infinity in the returned vector", async () => {
+    stubFetch(() => ({ json: { embeddings: [[1, Infinity, 3]] } }));
+    const emb = createEmbedder(cfg({ embeddingProvider: "ollama" }));
+    await assert.rejects(() => emb.embed(["x"]), /non-finite/);
+  });
+
+  it("throws on NaN in the returned vector", async () => {
+    stubFetch(() => ({ json: { embeddings: [[NaN]] } }));
+    const emb = createEmbedder(cfg({ embeddingProvider: "ollama" }));
+    await assert.rejects(() => emb.embed(["x"]), /non-finite/);
+  });
+
+  it("returns an empty array for empty input without making a request", async () => {
+    stubFetch(() => ({ json: { embeddings: [] } }));
+    const emb = createEmbedder(cfg({ embeddingProvider: "ollama" }));
+    const out = await emb.embed([]);
+    assert.deepEqual(out, []);
+    assert.equal(calls.length, 0, "should not POST for empty input");
   });
 
   it("enforces embedding_dimensions when configured", async () => {

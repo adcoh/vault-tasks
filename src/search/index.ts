@@ -2,7 +2,7 @@ import type { Task } from "../task.js";
 import type { TaskStore } from "../store.js";
 import { sortByPriority } from "../output.js";
 import { BM25Index } from "./bm25.js";
-import { EmbedCache } from "./embed-cache.js";
+import { EmbedCache, capEmbeddingText, embedText } from "./embed-cache.js";
 import { createEmbedder } from "./embeddings.js";
 import type { Embedder } from "./embeddings.js";
 import { tokenize } from "./tokenize.js";
@@ -115,7 +115,7 @@ export async function searchTasks(
     if (tasks.length === 0) return [];
     const embedder = buildEmbedder(store, opts);
     const embedded = await buildCache(store, embedder).getOrCompute(tasks, embedder);
-    const queryVec = (await embedder.embed([query]))[0];
+    const queryVec = (await embedder.embed([capEmbeddingText(query)]))[0];
     const vindex = new VectorIndex(embedded);
     const semHits = vindex.query(queryVec, mode === "semantic" ? limit : tasks.length);
 
@@ -188,7 +188,7 @@ export async function similarTasks(
     // includeArchived=false) — then embed its text directly.
     const queryVec = targetEntry
       ? targetEntry.vector
-      : (await embedder.embed([`${target.title}\n${target.tags.join(" ")}\n${target.body}`]))[0];
+      : (await embedder.embed([embedText(target)]))[0];
 
     const vindex = new VectorIndex(corpus);
     const semHits = vindex.query(queryVec, mode === "semantic" ? limit : corpus.length);
