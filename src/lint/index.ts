@@ -18,14 +18,20 @@ import { findBrokenLinks } from "./checks/broken.js";
 import { findEvergreenDrift } from "./checks/drift.js";
 import { buildInboundMap, findOrphanEvergreens } from "./checks/orphans.js";
 import { findStaleReferences } from "./checks/stale.js";
-import { collectWikilinks, readVaultFiles } from "./collect.js";
+import { collectLinks, readVaultFiles } from "./collect.js";
 import { buildIndex } from "./resolve.js";
 import { attachSuggestions, computeLeverageFixes } from "./suggest.js";
 import type { LintOptions, LintReport, VaultFile } from "./types.js";
 
 export * from "./types.js";
 export { buildIndex, normKey, resolveTarget, stripTargetSuffixes } from "./resolve.js";
-export { collectWikilinks, isTemplatePlaceholder, readVaultFiles } from "./collect.js";
+export {
+  collectLinks,
+  collectWikilinks,
+  isTemplatePlaceholder,
+  mdLinkTarget,
+  readVaultFiles,
+} from "./collect.js";
 export { findBrokenLinks } from "./checks/broken.js";
 export { buildInboundMap, findOrphanEvergreens } from "./checks/orphans.js";
 export { findStaleReferences } from "./checks/stale.js";
@@ -83,7 +89,7 @@ export function lintVault(config: Config, opts: LintOptions = {}): LintReport {
   const scopedFiles: VaultFile[] =
     scope === null ? allFiles : allFiles.filter((f) => inScope(f.relPath, scope));
 
-  const allLinks = collectWikilinks(
+  const allLinks = collectLinks(
     allFiles,
     lint.templateSourceDirs,
     lint.templateSourceFiles,

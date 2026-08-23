@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented here.
 
+## Unreleased
+
+### Fixed
+
+- **`vt lint` now resolves inline markdown links**, not just wikilinks. A
+  `[text](./note.md)` link previously went uncollected, which meant broken
+  markdown links were never reported *and* a note whose only inbound link was
+  a markdown link was falsely reported as an ORPHAN (or a STALE reference).
+  The gate that exists to catch link rot was reporting green on exactly the
+  breakage it guards. Matters now that tools which write markdown links —
+  OpenKnowledge among them — are editing wikilink-convention vaults.
+
+  External URLs, protocol-relative hrefs, bare anchors, non-`.md` targets, and
+  paths that climb out of the vault root are all ignored. Targets percent-decode,
+  drop their `#anchor`, and resolve relative to the source file's directory, so
+  they feed the existing resolver unchanged. Verified against a 430-file vault:
+  one genuinely broken relative link surfaced that every prior run had missed.
+
+### Added
+
+- **`collectLinks`** collects wikilinks and markdown links together, each
+  tagged with a new `kind: "wiki" | "md"` field on `WikiLink`. `mdLinkTarget`
+  is exported for callers that need the href → target conversion alone.
+  `collectWikilinks` keeps its exact previous contract as a wikilink-only view.
+
+  The human report still renders every broken target in `[[target]]` form.
+  That is deliberate: downstream gates parse that shape, and the resolution key
+  is identical either way.
+
 ## 0.6.0
 
 ### Added
