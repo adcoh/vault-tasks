@@ -272,6 +272,15 @@ describe("collectLinks — markdown links", () => {
     );
   });
 
+  it("reads a bare destination containing balanced parentheses", () => {
+    write(dir, "doc.md", "[x](./Report(2026).md)");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      collectLinks(files, [], [], []).map((l) => l.target),
+      ["Report(2026)"]
+    );
+  });
+
   it("rejects a target whose decoded href smuggles control characters", () => {
     // %0A decodes to a newline, which would otherwise reach the broken-link
     // report and forge output lines.

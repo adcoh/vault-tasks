@@ -25,8 +25,12 @@ const INLINE_CODE_RE = /`[^`\n]*`/g;
  * `[text](href)` — two destination forms, per CommonMark: an angle-bracketed
  * `<...>` destination, which may legitimately contain spaces, or a bare
  * destination ending at whitespace (an optional "title") or `)`.
+ *
+ * The bare form allows one level of balanced parentheses so filenames like
+ * `./Report(2026).md` are not truncated at the first `)`. Deeper nesting is not
+ * supported — regex cannot count — and such a path should use the `<...>` form.
  */
-const MD_LINK_RE = /\[[^\]\n]*\]\(\s*(?:<([^>\n]*)>|([^)\s]+))[^)\n]*\)/g;
+const MD_LINK_RE = /\[[^\]\n]*\]\(\s*(?:<([^>\n]*)>|((?:[^()\s]|\([^()\s]*\))+))[^)\n]*\)/g;
 /** A URI scheme (`https:`, `mailto:`) or a protocol-relative `//` prefix. */
 const EXTERNAL_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 /**
