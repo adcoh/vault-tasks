@@ -14,13 +14,33 @@
  */
 
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { join, posix as posixPath, relative, sep } from "node:path";
 import { parseFrontmatter } from "../frontmatter.js";
 import { stripTargetSuffixes } from "./resolve.js";
 import type { VaultFile, WikiLink } from "./types.js";
 
 const WIKILINK_RE = /\[\[([^\]\n]+?)\]\]/g;
 const INLINE_CODE_RE = /`[^`\n]*`/g;
+/**
+ * `[text](href)` — two destination forms, per CommonMark: an angle-bracketed
+ * `<...>` destination, which may legitimately contain spaces, or a bare
+ * destination ending at whitespace (an optional "title") or `)`.
+ *
+ * The bare form allows one level of balanced parentheses so filenames like
+ * `./Report(2026).md` are not truncated at the first `)`. Deeper nesting is not
+ * supported — regex cannot count — and such a path should use the `<...>` form.
+ */
+const MD_LINK_RE = /\[[^\]\n]*\]\(\s*(?:<([^>\n]*)>|((?:[^()\s]|\([^()\s]*\))+))[^)\n]*\)/g;
+/** A URI scheme (`https:`, `mailto:`) or a protocol-relative `//` prefix. */
+const EXTERNAL_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+/**
+ * C0/C1 control characters. `decodeURIComponent` happily turns `%0A` into a
+ * newline, which would otherwise reach the broken-link report and let a crafted
+ * href forge output lines — the same class of injection already closed for task
+ * fields in 0.5.0.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: detecting control characters is the intent
+const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f-\u009f]/;
 
 function toRelPosix(absPath: string, vaultRoot: string): string {
   return relative(vaultRoot, absPath).split(sep).join("/");
@@ -208,11 +228,50 @@ export function isTemplatePlaceholder(
 }
 
 /**
- * Scan a list of VaultFile records for wikilinks, skipping fenced code
- * blocks and inline code spans, plus any link that matches a template
- * placeholder pattern when it lives in a known template source.
+ * Convert an inline markdown link href into a resolution target, or null if it
+ * is not a link to a local markdown file in this vault.
+ *
+ * Rejects external URLs, protocol-relative hrefs, bare anchors, non-`.md`
+ * targets (assets, images), and any relative path that climbs out of the vault
+ * root. Otherwise returns a vault-relative path with the `.md` suffix removed,
+ * which is exactly the shape the wikilink resolver already understands.
  */
-export function collectWikilinks(
+export function mdLinkTarget(href: string, sourceRelPath: string): string | null {
+  let h = href.trim();
+  if (!h || h.startsWith("#") || EXTERNAL_RE.test(h)) return null;
+
+  h = h.split("#")[0].trim();
+  if (!h) return null;
+  try {
+    h = decodeURIComponent(h);
+  } catch {
+    // Malformed percent-encoding: fall through with the raw href.
+  }
+  // Decoding can materialise control bytes (`%0A` → newline). Such a target
+  // would flow into the broken-link report and forge output lines, so drop it
+  // rather than sanitising: no legitimate vault path contains them.
+  if (CONTROL_CHARS_RE.test(h)) return null;
+  if (!h.toLowerCase().endsWith(".md")) return null;
+
+  // A leading slash means vault-root-relative, not filesystem-absolute.
+  const rootRelative = h.startsWith("/");
+  const baseDir = rootRelative ? "." : posixPath.dirname(sourceRelPath);
+  const joined = posixPath.normalize(posixPath.join(baseDir, h.replace(/^\/+/, "")));
+  if (joined === ".." || joined.startsWith("../")) return null;
+
+  return joined.replace(/\.md$/i, "");
+}
+
+/**
+ * Scan a list of VaultFile records for links, skipping fenced code blocks and
+ * inline code spans, plus any link that matches a template placeholder pattern
+ * when it lives in a known template source.
+ *
+ * Collects both wikilinks and inline markdown links to local `.md` files, each
+ * tagged with its `kind`. Wikilinks are stripped from the line before the
+ * markdown scan so `[[target|alias]]` cannot be misread as `[text](href)`.
+ */
+export function collectLinks(
   files: VaultFile[],
   templateSourceDirs: string[],
   templateSourceFiles: string[],
@@ -220,6 +279,9 @@ export function collectWikilinks(
 ): WikiLink[] {
   const compiled = templatePatterns.map((p) => new RegExp(p));
   const out: WikiLink[] = [];
+
+  const keep = (target: string, source: string): boolean =>
+    !isTemplatePlaceholder(target, source, templateSourceDirs, templateSourceFiles, compiled);
 
   for (const f of files) {
     const lines = f.text.split("\n");
@@ -234,27 +296,43 @@ export function collectWikilinks(
       if (inFence) continue;
 
       const cleaned = raw.replace(INLINE_CODE_RE, "");
+
       WIKILINK_RE.lastIndex = 0;
       let m: RegExpExecArray | null;
       // biome-ignore lint/suspicious/noAssignInExpressions: canonical global-regex exec() iteration idiom
       while ((m = WIKILINK_RE.exec(cleaned)) !== null) {
         const target = stripTargetSuffixes(m[1]);
         if (!target) continue;
-        if (
-          isTemplatePlaceholder(
-            target,
-            f.relPath,
-            templateSourceDirs,
-            templateSourceFiles,
-            compiled
-          )
-        ) {
-          continue;
-        }
-        out.push({ target, source: f.relPath, line: i + 1 });
+        if (!keep(target, f.relPath)) continue;
+        out.push({ target, source: f.relPath, line: i + 1, kind: "wiki" });
+      }
+
+      const withoutWikilinks = cleaned.replace(WIKILINK_RE, "");
+      MD_LINK_RE.lastIndex = 0;
+      // biome-ignore lint/suspicious/noAssignInExpressions: canonical global-regex exec() iteration idiom
+      while ((m = MD_LINK_RE.exec(withoutWikilinks)) !== null) {
+        // Group 1 is the `<...>` destination, group 2 the bare one.
+        const target = mdLinkTarget(m[1] ?? m[2] ?? "", f.relPath);
+        if (!target) continue;
+        if (!keep(target, f.relPath)) continue;
+        out.push({ target, source: f.relPath, line: i + 1, kind: "md" });
       }
     }
   }
 
   return out;
+}
+
+/**
+ * Wikilink-only view of {@link collectLinks}, kept for API compatibility.
+ */
+export function collectWikilinks(
+  files: VaultFile[],
+  templateSourceDirs: string[],
+  templateSourceFiles: string[],
+  templatePatterns: string[]
+): WikiLink[] {
+  return collectLinks(files, templateSourceDirs, templateSourceFiles, templatePatterns).filter(
+    (l) => l.kind === "wiki"
+  );
 }

@@ -12,7 +12,9 @@ export {
   resolveTarget,
   stripTargetSuffixes,
   normKey,
+  collectLinks,
   collectWikilinks,
+  mdLinkTarget,
   readVaultFiles,
   isTemplatePlaceholder,
   findBrokenLinks,
@@ -30,6 +32,7 @@ export {
 export type {
   LintReport,
   LintOptions,
+  LinkKind,
   WikiLink,
   VaultFile,
   ResolutionIndex,

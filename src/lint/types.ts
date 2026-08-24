@@ -5,14 +5,25 @@
  * resolvable wikilink targets, and reports issues. It never mutates files.
  */
 
-/** A single wikilink occurrence in a file. */
+/**
+ * How a link was written in the source.
+ *
+ * `md` covers inline markdown links to local `.md` files (`[text](./x.md)`).
+ * They resolve to the same targets as wikilinks, so leaving them uncollected
+ * would both miss broken links and report falsely-orphaned notes.
+ */
+export type LinkKind = "wiki" | "md";
+
+/** A single link occurrence in a file. */
 export interface WikiLink {
-  /** Resolution key — alias and anchor stripped. */
+  /** Resolution key — alias and anchor stripped, `.md` suffix removed. */
   target: string;
   /** Vault-relative source file. */
   source: string;
   /** 1-based line number. */
   line: number;
+  /** Which syntax produced this link. */
+  kind: LinkKind;
 }
 
 /** A file as seen by the linter. */

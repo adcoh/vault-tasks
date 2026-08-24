@@ -6,7 +6,12 @@ import { tmpdir } from "node:os";
 import type { Config } from "../config.js";
 import { lintVault } from "../lint/index.js";
 import { buildIndex, normKey, resolveTarget, stripTargetSuffixes } from "../lint/resolve.js";
-import { collectWikilinks, isTemplatePlaceholder, readVaultFiles } from "../lint/collect.js";
+import {
+  collectLinks,
+  collectWikilinks,
+  isTemplatePlaceholder,
+  readVaultFiles,
+} from "../lint/collect.js";
 import { findBrokenLinks } from "../lint/checks/broken.js";
 import { attachSuggestions, computeLeverageFixes } from "../lint/suggest.js";
 import { formatHumanReport, formatJsonReport, formatSummaryLine } from "../lint/report.js";
@@ -162,6 +167,126 @@ describe("buildIndex + resolveTarget", () => {
     const collidedKey = idx.collisions.get("foobar");
     assert.ok(collidedKey, "expected collision under 'foobar'");
     assert.equal(collidedKey!.length, 2);
+  });
+});
+
+describe("collectLinks — markdown links", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-lint-mdlink-"));
+  });
+
+  it("collects a local markdown link as a resolvable target", () => {
+    write(dir, "notes/doc.md", "See [the other note](./other.md) for detail.");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    const links = collectLinks(files, [], [], []);
+    assert.deepEqual(
+      links.map((l) => ({ target: l.target, kind: l.kind })),
+      [{ target: "notes/other", kind: "md" }]
+    );
+  });
+
+  it("collects wikilinks alongside markdown links, each tagged by kind", () => {
+    write(dir, "doc.md", "A [[wiki-target]] and a [md](./md-target.md).");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    const links = collectLinks(files, [], [], []);
+    assert.deepEqual(
+      links.map((l) => ({ target: l.target, kind: l.kind })),
+      [
+        { target: "wiki-target", kind: "wiki" },
+        { target: "md-target", kind: "md" },
+      ]
+    );
+  });
+
+  it("resolves markdown links relative to the source file's directory", () => {
+    write(dir, "a/b/doc.md", "Up two: [x](../../top.md) and up one: [y](../sib.md)");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    const links = collectLinks(files, [], [], []);
+    assert.deepEqual(
+      links.map((l) => l.target),
+      ["top", "a/sib"]
+    );
+  });
+
+  it("ignores external URLs, bare anchors, and non-markdown targets", () => {
+    write(
+      dir,
+      "doc.md",
+      [
+        "[http](https://example.com/page.md)",
+        "[proto](//cdn.example.com/x.md)",
+        "[mail](mailto:someone@example.com)",
+        "[anchor](#a-section)",
+        "[pdf](./file.pdf)",
+        "[img](./pic.png)",
+      ].join("\n")
+    );
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(collectLinks(files, [], [], []), []);
+  });
+
+  it("strips the anchor and percent-decodes the path", () => {
+    write(dir, "doc.md", "[a](./My%20Note.md#heading)");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      collectLinks(files, [], [], []).map((l) => l.target),
+      ["My Note"]
+    );
+  });
+
+  it("does not misread an aliased wikilink as a markdown link", () => {
+    write(dir, "doc.md", "[[real-target|display text]]");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      collectLinks(files, [], [], []).map((l) => ({ target: l.target, kind: l.kind })),
+      [{ target: "real-target", kind: "wiki" }]
+    );
+  });
+
+  it("skips markdown links inside fenced blocks and inline code", () => {
+    write(
+      dir,
+      "doc.md",
+      "```\n[fenced](./nope.md)\n```\n\nInline `[code](./nope2.md)` then [real](./yes.md)"
+    );
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      collectLinks(files, [], [], []).map((l) => l.target),
+      ["yes"]
+    );
+  });
+
+  it("does not escape the vault root", () => {
+    write(dir, "doc.md", "[out](../../../etc/passwd.md)");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(collectLinks(files, [], [], []), []);
+  });
+
+  it("reads angle-bracket destinations containing spaces", () => {
+    write(dir, "doc.md", "[note](<./My Note.md>)");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      collectLinks(files, [], [], []).map((l) => l.target),
+      ["My Note"]
+    );
+  });
+
+  it("reads a bare destination containing balanced parentheses", () => {
+    write(dir, "doc.md", "[x](./Report(2026).md)");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      collectLinks(files, [], [], []).map((l) => l.target),
+      ["Report(2026)"]
+    );
+  });
+
+  it("rejects a target whose decoded href smuggles control characters", () => {
+    // %0A decodes to a newline, which would otherwise reach the broken-link
+    // report and forge output lines.
+    write(dir, "doc.md", "[x](./missing%0Ainjected.md)");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(collectLinks(files, [], [], []), []);
   });
 });
 
@@ -427,6 +552,32 @@ describe("lintVault", () => {
     const cfg = makeConfig(dir);
     const report = lintVault(cfg, { only: "orphans" });
     assert.equal(report.summary.orphans, 0);
+  });
+
+  it("does not report an evergreen as orphaned when its only inbound link is a markdown link", () => {
+    write(
+      dir,
+      "30-evergreen/target.md",
+      "---\ntitle: Target\ntags: [x]\n---\n# Target\n\n[[other]]\n\n## Related"
+    );
+    write(
+      dir,
+      "30-evergreen/other.md",
+      "---\ntitle: Other\ntags: [x]\n---\n# Other\n\nSee [Target](./target.md)\n\n## Related"
+    );
+    const cfg = makeConfig(dir);
+    const report = lintVault(cfg, { only: "orphans" });
+    assert.deepEqual(report.orphans, []);
+  });
+
+  it("reports a broken markdown link alongside broken wikilinks", () => {
+    write(dir, "doc.md", "[gone](./missing-note.md)");
+    const cfg = makeConfig(dir);
+    const report = lintVault(cfg, { only: "broken" });
+    assert.deepEqual(
+      report.broken.map((b) => b.target),
+      ["missing-note"]
+    );
   });
 
   it("emits collision warnings", () => {
