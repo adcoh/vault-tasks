@@ -21,10 +21,22 @@ import type { VaultFile, WikiLink } from "./types.js";
 
 const WIKILINK_RE = /\[\[([^\]\n]+?)\]\]/g;
 const INLINE_CODE_RE = /`[^`\n]*`/g;
-/** `[text](href)` — href ends at whitespace (an optional "title") or `)`. */
-const MD_LINK_RE = /\[[^\]\n]*\]\(\s*<?([^)>\s]+)>?[^)\n]*\)/g;
+/**
+ * `[text](href)` — two destination forms, per CommonMark: an angle-bracketed
+ * `<...>` destination, which may legitimately contain spaces, or a bare
+ * destination ending at whitespace (an optional "title") or `)`.
+ */
+const MD_LINK_RE = /\[[^\]\n]*\]\(\s*(?:<([^>\n]*)>|([^)\s]+))[^)\n]*\)/g;
 /** A URI scheme (`https:`, `mailto:`) or a protocol-relative `//` prefix. */
 const EXTERNAL_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+/**
+ * C0/C1 control characters. `decodeURIComponent` happily turns `%0A` into a
+ * newline, which would otherwise reach the broken-link report and let a crafted
+ * href forge output lines — the same class of injection already closed for task
+ * fields in 0.5.0.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: detecting control characters is the intent
+const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f-\u009f]/;
 
 function toRelPosix(absPath: string, vaultRoot: string): string {
   return relative(vaultRoot, absPath).split(sep).join("/");
@@ -231,6 +243,10 @@ export function mdLinkTarget(href: string, sourceRelPath: string): string | null
   } catch {
     // Malformed percent-encoding: fall through with the raw href.
   }
+  // Decoding can materialise control bytes (`%0A` → newline). Such a target
+  // would flow into the broken-link report and forge output lines, so drop it
+  // rather than sanitising: no legitimate vault path contains them.
+  if (CONTROL_CHARS_RE.test(h)) return null;
   if (!h.toLowerCase().endsWith(".md")) return null;
 
   // A leading slash means vault-root-relative, not filesystem-absolute.
@@ -291,7 +307,8 @@ export function collectLinks(
       MD_LINK_RE.lastIndex = 0;
       // biome-ignore lint/suspicious/noAssignInExpressions: canonical global-regex exec() iteration idiom
       while ((m = MD_LINK_RE.exec(withoutWikilinks)) !== null) {
-        const target = mdLinkTarget(m[1], f.relPath);
+        // Group 1 is the `<...>` destination, group 2 the bare one.
+        const target = mdLinkTarget(m[1] ?? m[2] ?? "", f.relPath);
         if (!target) continue;
         if (!keep(target, f.relPath)) continue;
         out.push({ target, source: f.relPath, line: i + 1, kind: "md" });

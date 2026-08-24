@@ -262,6 +262,23 @@ describe("collectLinks — markdown links", () => {
     const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
     assert.deepEqual(collectLinks(files, [], [], []), []);
   });
+
+  it("reads angle-bracket destinations containing spaces", () => {
+    write(dir, "doc.md", "[note](<./My Note.md>)");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      collectLinks(files, [], [], []).map((l) => l.target),
+      ["My Note"]
+    );
+  });
+
+  it("rejects a target whose decoded href smuggles control characters", () => {
+    // %0A decodes to a newline, which would otherwise reach the broken-link
+    // report and forge output lines.
+    write(dir, "doc.md", "[x](./missing%0Ainjected.md)");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(collectLinks(files, [], [], []), []);
+  });
 });
 
 describe("collectWikilinks", () => {
