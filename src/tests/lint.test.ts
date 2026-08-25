@@ -1043,7 +1043,7 @@ describe("walkMarkdown (git worktree skipping)", () => {
 
   it("walks a directory whose .git file exceeds the size cap (fails open, never reads it fully)", () => {
     write(dir, "foo/c.md", "Body");
-    // A real worktree marker is <200 bytes. A oversized regular file named
+    // A real worktree marker is a single short line. An oversized file named
     // `.git` (70KB, well past the 64KB cap) must not be read into memory —
     // it fails open and the directory is walked normally.
     const huge = `gitdir: /elsewhere/.git/worktrees/foo\n${"x".repeat(70_000)}`;
