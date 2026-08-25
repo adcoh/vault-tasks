@@ -80,14 +80,15 @@ const GIT_MARKER_MAX_BYTES = 65536;
  * `.../modules/<name>/worktrees/<wt>`, still correctly skips: there
  * `modules` is one slot further back).
  *
- * This is deliberately fail-open: a `.git` file with no `gitdir:` line (or
- * one not on the first line — git itself only ever writes the marker there),
- * an unreadable file, one over {@link GIT_MARKER_MAX_BYTES}, or any shape
- * that isn't unambiguously `.../worktrees/*` is walked normally. A
- * wrongly-walked exotic worktree only costs perf; a wrongly-skipped
- * submodule is silent data loss, which is the worse failure mode. Missing
- * `.git` entirely is the overwhelmingly common case (not a worktree) and
- * must not warn.
+ * This is deliberately fail-open: a `.git` file whose first line isn't
+ * exactly `gitdir: <path>` (no leading whitespace, colon AND a mandatory
+ * space — git itself only ever writes it that way, on the first line, per
+ * `read_gitfile_gently`), an unreadable file, one over
+ * {@link GIT_MARKER_MAX_BYTES}, or any shape that isn't unambiguously
+ * `.../worktrees/*` is walked normally. A wrongly-walked exotic worktree
+ * only costs perf; a wrongly-skipped submodule is silent data loss, which is
+ * the worse failure mode. Missing `.git` entirely is the overwhelmingly
+ * common case (not a worktree) and must not warn.
  */
 function isGitWorktreeCheckout(dirAbs: string): boolean {
   const gitPath = join(dirAbs, ".git");
@@ -104,13 +105,15 @@ function isGitWorktreeCheckout(dirAbs: string): boolean {
     return false;
   }
 
-  // Git only ever writes the worktree marker with "gitdir: <path>" as the
-  // file's first line (see git's read_gitfile_gently) — a gitdir-shaped
-  // line further down is not a marker git wrote, so it doesn't count.
-  const firstLine = (content.split(/\r?\n/, 1)[0] ?? "").trim();
-  if (!firstLine.startsWith("gitdir:")) return false;
+  // Git only ever writes the worktree marker as the file's first line, with
+  // the exact 8-byte prefix "gitdir: " (colon AND a mandatory space, no
+  // leading whitespace before it — see git's read_gitfile_gently). A line
+  // that doesn't match that exactly is not a marker git wrote, so it
+  // doesn't count; deliberately NOT trimmed before the prefix check.
+  const firstLine = content.split(/\r?\n/, 1)[0] ?? "";
+  if (!firstLine.startsWith("gitdir: ")) return false;
 
-  const gitdirPath = firstLine.slice("gitdir:".length).trim();
+  const gitdirPath = firstLine.slice("gitdir: ".length).trim();
   if (!gitdirPath) return false;
 
   const segments = gitdirPath

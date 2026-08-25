@@ -1103,6 +1103,32 @@ describe("walkMarkdown (git worktree skipping)", () => {
     );
   });
 
+  it("walks a directory whose .git file is missing the space after 'gitdir:' (fails open)", () => {
+    // CodeRabbit round 3 on PR #31: git's read_gitfile_gently requires the
+    // exact 8-byte prefix "gitdir: " (colon AND a space). A marker missing
+    // the space is not one git wrote, so it must not classify as a
+    // worktree.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir:/elsewhere/.git/worktrees/wt1\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("walks a directory whose .git file has leading whitespace before 'gitdir:' (fails open)", () => {
+    // Same rationale: git never writes leading whitespace before the
+    // "gitdir: " prefix, so a line that has it isn't a marker git wrote.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "  gitdir: /elsewhere/.git/worktrees/wt1\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
   it("emits no warning for a skipped worktree directory", () => {
     write(dir, "foo/c.md", "Body");
     writeFileSync(join(dir, "foo", ".git"), "gitdir: /elsewhere/.git/worktrees/foo\n");
