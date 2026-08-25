@@ -1031,6 +1031,38 @@ describe("walkMarkdown (git worktree skipping)", () => {
     );
   });
 
+  it("walks a submodule mounted at a superproject path named 'worktrees' (gitdir: .../modules/worktrees/foo)", () => {
+    // CodeRabbit finding on PR #31: a submodule at superproject path
+    // "worktrees/<name>" has gitdir ".../modules/worktrees/<name>" — the
+    // penultimate segment is "worktrees", so the old penultimate-only check
+    // misclassified it as a worktree and silently dropped its content. The
+    // segment before "worktrees" here is "modules", which is what
+    // distinguishes this from a real worktree marker.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: ../.git/modules/worktrees/foo\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("skips a worktree of a submodule (gitdir: .../modules/x/worktrees/y)", () => {
+    // Regression lock: unlike the submodule-mounted-at-"worktrees" case
+    // above, here "worktrees" is the checkout's OWN worktree segment (the
+    // submodule is named "x", not "worktrees") — this is a real worktree,
+    // just of a submodule instead of the main repo, and must still be
+    // skipped like any other worktree.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: ../.git/modules/x/worktrees/y\n");
+    write(dir, "real.md", "Body");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["real.md"]
+    );
+  });
+
   it("walks a directory whose .git file has no gitdir: line (fails open)", () => {
     write(dir, "foo/c.md", "Body");
     writeFileSync(join(dir, "foo", ".git"), "not a real git file\n");

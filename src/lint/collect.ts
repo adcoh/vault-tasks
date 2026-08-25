@@ -72,7 +72,13 @@ const GIT_MARKER_MAX_BYTES = 65536;
  * vault legitimately kept in a submodule must NOT be skipped, or its content
  * silently vanishes from the audit. The two are distinguished by the
  * `gitdir:` path's penultimate segment (`worktrees` vs `modules`), tolerant
- * of `/` and `\` separators and relative or absolute paths.
+ * of `/` and `\` separators and relative or absolute paths. A submodule can
+ * itself be mounted at a superproject path literally named `worktrees`
+ * (gitdir `.../modules/worktrees/<name>`), which also has `worktrees` as the
+ * penultimate segment — that's disambiguated by requiring the segment
+ * *before* it not be `modules` (a worktree OF a submodule, e.g.
+ * `.../modules/<name>/worktrees/<wt>`, still correctly skips: there
+ * `modules` is one slot further back).
  *
  * This is deliberately fail-open: a `.git` file with no `gitdir:` line, an
  * unreadable file, one over {@link GIT_MARKER_MAX_BYTES}, or any shape that
@@ -106,9 +112,15 @@ function isGitWorktreeCheckout(dirAbs: string): boolean {
     .replace(/[/\\]+$/, "")
     .split(/[/\\]+/)
     .filter((s) => s.length > 0);
-  if (segments.length < 2) return false;
+  // A real worktree marker needs at least `<repo>/worktrees/<name>` (3
+  // segments): the length-3 check below reads segments[length - 3], which a
+  // bare 2-segment "worktrees/x" doesn't have — such a path isn't a
+  // worktree gitdir shape at all, so it fails open too.
+  if (segments.length < 3) return false;
 
-  return segments[segments.length - 2] === "worktrees";
+  return (
+    segments[segments.length - 2] === "worktrees" && segments[segments.length - 3] !== "modules"
+  );
 }
 
 /**

@@ -16,8 +16,18 @@ files=$(find . -name '*.md' -not -path './.git/*' | wc -l | tr -d ' ')
 echo "== $label ($files md files on disk) =="
 for mode in "" "--no-suggestions" "--only drift"; do
   s=$(python3 -c 'import time;print(time.time())')
-  # shellcheck disable=SC2086 -- $mode is intentionally word-split
+  # $mode is intentionally word-split: unquoted so an empty mode passes no
+  # extra arg, and "--only drift" splits into two args.
+  # shellcheck disable=SC2086
   "${vt_cmd[@]}" lint --quiet $mode >/dev/null 2>&1
+  rc=$?
+  # `vt lint` exits 1 when the vault simply has lint issues (normal on real
+  # vaults — not a bench failure) and 2+ on real errors; a missing binary
+  # gives 127. Only >1 is an actual failure worth aborting the bench for.
+  if [ "$rc" -gt 1 ]; then
+    echo "  ${mode:-full}: FAILED (exit $rc)" >&2
+    exit "$rc"
+  fi
   e=$(python3 -c 'import time;print(time.time())')
   echo "  ${mode:-full}: $(python3 -c "print(f'{$e-$s:.1f}s')")"
 done
