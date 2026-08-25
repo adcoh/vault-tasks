@@ -62,3 +62,28 @@ export function similarity(a: string, b: string): number {
 
   return diceCoefficient(trigrams(na), trigrams(nb));
 }
+
+/**
+ * Normalize then trigram a string, for callers that compare one string
+ * against many others (e.g. lint suggestion scoring) and want to compute
+ * each side's trigram set once instead of on every pairwise comparison.
+ */
+export function trigramsOf(s: string): Set<string> {
+  return trigrams(normalize(s));
+}
+
+/**
+ * Compute the Dice coefficient between two pre-computed trigram sets, as
+ * produced by `trigramsOf`.
+ *
+ * Equivalent to `similarity(a, b)`: for all strings a, b,
+ * `similarityFromSets(trigramsOf(a), trigramsOf(b)) === similarity(a, b)`.
+ * This holds at the edges too — two strings that normalize to the same text
+ * produce equal trigram sets, so the Dice coefficient is 1.0 either way;
+ * punctuation-only strings normalize to "" and trigram to the empty set, so
+ * two such strings give 1.0 (both empty) and one-empty-one-nonempty gives
+ * 0.0, matching `similarity`'s short-circuit behavior.
+ */
+export function similarityFromSets(a: Set<string>, b: Set<string>): number {
+  return diceCoefficient(a, b);
+}

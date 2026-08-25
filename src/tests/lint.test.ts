@@ -454,6 +454,64 @@ describe("attachSuggestions", () => {
     assert.equal(fixes[0].closes, 8);
     assert.equal(fixes[0].aliases.length, 2);
   });
+
+  it("produces byte-identical suggestions to v0.6.0 for a fixed fixture", () => {
+    // Regression fixture for the trigram-set-hoisting optimization (issue
+    // #30, cause 2): attachSuggestions must produce exactly the same
+    // suggestions (paths, kinds, similarity values, order) it did before the
+    // hoist. Expected values below were captured from v0.6.0's
+    // similarity()-per-comparison implementation and are encoded literally
+    // — this test must NOT call similarity()/the old code path to derive
+    // them, or it would validate nothing after the refactor.
+    write(dir, "quarterly-plan.md", "---\ntitle: Quarterly Plan\naliases: [Q Plan]\n---\nBody");
+    write(dir, "quarterly-review.md", "---\ntitle: Quarterly Review\n---\nBody");
+    write(dir, "annual-report.md", "---\ntitle: Annual Report\n---\nBody");
+    const idx = buildIndex(readVaultFiles(dir, [".git", "node_modules"], () => {}));
+
+    const broken: BrokenEntry[] = [
+      {
+        target: "quartely plan",
+        count: 2,
+        locations: [{ source: "a.md", line: 1 }],
+        suggestions: [],
+      },
+      {
+        target: "anual repot",
+        count: 1,
+        locations: [{ source: "b.md", line: 3 }],
+        suggestions: [],
+      },
+    ];
+
+    attachSuggestions(broken, idx, 0.3);
+
+    assert.deepEqual(broken[0].suggestions, [
+      {
+        filePath: "quarterly-plan.md",
+        candidate: "Quarterly Plan",
+        kind: "title",
+        similarity: 0.8148148148148148,
+        proposedAlias: "quartely plan",
+      },
+      {
+        filePath: "quarterly-review.md",
+        candidate: "Quarterly Review",
+        kind: "title",
+        similarity: 0.41379310344827586,
+        proposedAlias: "quartely plan",
+      },
+    ]);
+
+    assert.deepEqual(broken[1].suggestions, [
+      {
+        filePath: "annual-report.md",
+        candidate: "Annual Report",
+        kind: "title",
+        similarity: 0.6666666666666666,
+        proposedAlias: "anual repot",
+      },
+    ]);
+  });
 });
 
 describe("lintVault", () => {

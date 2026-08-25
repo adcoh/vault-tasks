@@ -15,13 +15,18 @@
  * links at once.
  */
 
-import { similarity } from "../similarity.js";
+import { similarityFromSets, trigramsOf } from "../similarity.js";
 import type { BrokenEntry, LeverageFix, ResolutionIndex, Suggestion, VaultFile } from "./types.js";
 
 interface Candidate {
   text: string;
   kind: "basename" | "title" | "alias";
   filePath: string;
+  /** Trigram set of `text`, precomputed once so the per-entry scoring loop
+   * (O(entries × candidates)) never re-normalizes/re-trigrams a candidate
+   * string more than once regardless of how many broken entries it's
+   * compared against. */
+  trigrams: Set<string>;
 }
 
 function basename(relPath: string): string {
@@ -33,12 +38,20 @@ function basename(relPath: string): string {
 function buildCandidates(files: VaultFile[]): Candidate[] {
   const out: Candidate[] = [];
   for (const f of files) {
-    out.push({ text: basename(f.relPath), kind: "basename", filePath: f.relPath });
+    const bn = basename(f.relPath);
+    out.push({ text: bn, kind: "basename", filePath: f.relPath, trigrams: trigramsOf(bn) });
     if (f.title) {
-      out.push({ text: f.title, kind: "title", filePath: f.relPath });
+      out.push({
+        text: f.title,
+        kind: "title",
+        filePath: f.relPath,
+        trigrams: trigramsOf(f.title),
+      });
     }
     for (const alias of f.aliases) {
-      if (alias) out.push({ text: alias, kind: "alias", filePath: f.relPath });
+      if (alias) {
+        out.push({ text: alias, kind: "alias", filePath: f.relPath, trigrams: trigramsOf(alias) });
+      }
     }
   }
   return out;
@@ -61,9 +74,10 @@ export function attachSuggestions(
   if (candidates.length === 0) return;
 
   for (const entry of broken) {
+    const targetTrigrams = trigramsOf(entry.target);
     const scored: Array<{ cand: Candidate; sim: number }> = [];
     for (const cand of candidates) {
-      const sim = similarity(entry.target, cand.text);
+      const sim = similarityFromSets(targetTrigrams, cand.trigrams);
       if (sim >= threshold) {
         scored.push({ cand, sim });
       }
