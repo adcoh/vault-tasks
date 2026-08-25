@@ -131,6 +131,7 @@ const DEFAULT_LINT: LintConfig = {
     "build",
     ".claude/worktrees",
     ".worktrees",
+    ".venv",
   ],
   evergreenConventions: {
     requireFrontmatter: true,

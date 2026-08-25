@@ -948,6 +948,31 @@ describe("walkMarkdown (git worktree skipping)", () => {
     );
   });
 
+  it("lints exactly the real file when a .venv site-packages copy collides on basename", async () => {
+    // Uses real production defaults (via loadConfig, no .vault-tasks.toml
+    // present) rather than makeConfig's stripped-down skipDirs, so this
+    // actually exercises DEFAULT_LINT.skipDirs — a Python virtualenv's
+    // site-packages can ship its own markdown (e.g. a package's AGENTS.md)
+    // that collides on basename with real vault notes.
+    const { loadConfig } = await import("../config.js");
+    write(dir, "notes/a.md", "---\ntitle: A\n---\nReal body\n\n[[b]]");
+    write(dir, "notes/b.md", "---\ntitle: B\n---\nReal body");
+    write(dir, ".venv/lib/site-packages/pkg/b.md", "Some unrelated package markdown");
+    const cfg = loadConfig(dir);
+    const report = lintVault(cfg);
+    assert.equal(
+      report.warnings.some((w) => w.includes("share normalised key")),
+      false,
+      ".venv copy must not surface as a basename collision"
+    );
+    assert.equal(report.summary.broken, 0);
+    const files = readVaultFiles(dir, cfg.lint.skipDirs, () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["notes/a.md", "notes/b.md"]
+    );
+  });
+
   it("skips a subdirectory that contains a .git regular file (a git worktree)", () => {
     write(dir, "foo/c.md", "Body");
     writeFileSync(join(dir, "foo", ".git"), "gitdir: /elsewhere/.git/worktrees/foo\n");

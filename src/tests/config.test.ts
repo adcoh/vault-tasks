@@ -257,6 +257,10 @@ describe("loadConfig", () => {
       config.lint.skipDirs.includes(".worktrees"),
       `expected default skipDirs to include ".worktrees", got ${JSON.stringify(config.lint.skipDirs)}`
     );
+    assert.ok(
+      config.lint.skipDirs.includes(".venv"),
+      `expected default skipDirs to include ".venv", got ${JSON.stringify(config.lint.skipDirs)}`
+    );
   });
 
   it("user-set [lint] skip_dirs fully replaces the defaults, not merges", () => {
