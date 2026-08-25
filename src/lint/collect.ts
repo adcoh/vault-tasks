@@ -80,12 +80,14 @@ const GIT_MARKER_MAX_BYTES = 65536;
  * `.../modules/<name>/worktrees/<wt>`, still correctly skips: there
  * `modules` is one slot further back).
  *
- * This is deliberately fail-open: a `.git` file with no `gitdir:` line, an
- * unreadable file, one over {@link GIT_MARKER_MAX_BYTES}, or any shape that
- * isn't unambiguously `.../worktrees/*` is walked normally. A wrongly-walked
- * exotic worktree only costs perf; a wrongly-skipped submodule is silent
- * data loss, which is the worse failure mode. Missing `.git` entirely is the
- * overwhelmingly common case (not a worktree) and must not warn.
+ * This is deliberately fail-open: a `.git` file with no `gitdir:` line (or
+ * one not on the first line — git itself only ever writes the marker there),
+ * an unreadable file, one over {@link GIT_MARKER_MAX_BYTES}, or any shape
+ * that isn't unambiguously `.../worktrees/*` is walked normally. A
+ * wrongly-walked exotic worktree only costs perf; a wrongly-skipped
+ * submodule is silent data loss, which is the worse failure mode. Missing
+ * `.git` entirely is the overwhelmingly common case (not a worktree) and
+ * must not warn.
  */
 function isGitWorktreeCheckout(dirAbs: string): boolean {
   const gitPath = join(dirAbs, ".git");
@@ -102,10 +104,13 @@ function isGitWorktreeCheckout(dirAbs: string): boolean {
     return false;
   }
 
-  const gitdirLine = content.split(/\r?\n/).find((line) => line.trim().startsWith("gitdir:"));
-  if (!gitdirLine) return false;
+  // Git only ever writes the worktree marker with "gitdir: <path>" as the
+  // file's first line (see git's read_gitfile_gently) — a gitdir-shaped
+  // line further down is not a marker git wrote, so it doesn't count.
+  const firstLine = (content.split(/\r?\n/, 1)[0] ?? "").trim();
+  if (!firstLine.startsWith("gitdir:")) return false;
 
-  const gitdirPath = gitdirLine.trim().slice("gitdir:".length).trim();
+  const gitdirPath = firstLine.slice("gitdir:".length).trim();
   if (!gitdirPath) return false;
 
   const segments = gitdirPath

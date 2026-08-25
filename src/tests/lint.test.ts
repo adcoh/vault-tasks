@@ -1073,6 +1073,23 @@ describe("walkMarkdown (git worktree skipping)", () => {
     );
   });
 
+  it("walks a directory whose .git file has a gitdir: line that isn't the first line (fails open)", () => {
+    // CodeRabbit round 2 on PR #31: git itself only ever writes the
+    // worktree marker with "gitdir: <path>" as the file's first line. A
+    // malformed or coincidental file with a gitdir-shaped line further
+    // down must not classify as a worktree.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(
+      join(dir, "foo", ".git"),
+      "not a marker\ngitdir: /elsewhere/.git/worktrees/wt1\n"
+    );
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
   it("walks a directory whose .git file exceeds the size cap (fails open, never reads it fully)", () => {
     write(dir, "foo/c.md", "Body");
     // A real worktree marker is a single short line. An oversized file named
