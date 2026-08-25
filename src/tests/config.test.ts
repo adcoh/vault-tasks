@@ -245,4 +245,28 @@ describe("loadConfig", () => {
     writeFileSync(join(dir, ".vault-tasks.toml"), '[search]\nembedding_model = ""\n');
     assert.throws(() => loadConfig(dir), /embedding_model/);
   });
+
+  it("default [lint] skip_dirs includes git-worktree directories", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    const config = loadConfig(dir);
+    assert.ok(
+      config.lint.skipDirs.includes(".claude/worktrees"),
+      `expected default skipDirs to include ".claude/worktrees", got ${JSON.stringify(config.lint.skipDirs)}`
+    );
+    assert.ok(
+      config.lint.skipDirs.includes(".worktrees"),
+      `expected default skipDirs to include ".worktrees", got ${JSON.stringify(config.lint.skipDirs)}`
+    );
+    assert.ok(
+      config.lint.skipDirs.includes(".venv"),
+      `expected default skipDirs to include ".venv", got ${JSON.stringify(config.lint.skipDirs)}`
+    );
+  });
+
+  it("user-set [lint] skip_dirs fully replaces the defaults, not merges", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    writeFileSync(join(dir, ".vault-tasks.toml"), '[lint]\nskip_dirs = ["custom-only"]\n');
+    const config = loadConfig(dir);
+    assert.deepEqual(config.lint.skipDirs, ["custom-only"]);
+  });
 });

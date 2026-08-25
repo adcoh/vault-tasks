@@ -454,6 +454,71 @@ describe("attachSuggestions", () => {
     assert.equal(fixes[0].closes, 8);
     assert.equal(fixes[0].aliases.length, 2);
   });
+
+  it("produces byte-identical suggestions to v0.6.0 for a fixed fixture", () => {
+    // Regression fixture for the trigram-set-hoisting optimization (issue
+    // #30, cause 2): attachSuggestions must produce exactly the same
+    // suggestions (paths, kinds, similarity values, order) it did before the
+    // hoist. Expected values below were captured from v0.6.0's
+    // similarity()-per-comparison implementation and are encoded literally
+    // — this test must NOT call similarity()/the old code path to derive
+    // them, or it would validate nothing after the refactor.
+    write(dir, "quarterly-plan.md", "---\ntitle: Quarterly Plan\naliases: [Q Plan]\n---\nBody");
+    write(dir, "quarterly-review.md", "---\ntitle: Quarterly Review\n---\nBody");
+    write(dir, "annual-report.md", "---\ntitle: Annual Report\n---\nBody");
+    const idx = buildIndex(readVaultFiles(dir, [".git", "node_modules"], () => {}));
+
+    const broken: BrokenEntry[] = [
+      {
+        target: "quartely plan",
+        count: 2,
+        locations: [{ source: "a.md", line: 1 }],
+        suggestions: [],
+      },
+      {
+        target: "anual repot",
+        count: 1,
+        locations: [{ source: "b.md", line: 3 }],
+        suggestions: [],
+      },
+    ];
+
+    attachSuggestions(broken, idx, 0.3);
+
+    // The `kind: "title"` pick below is a locale-sensitive tie-break, not
+    // an arbitrary encoding: "quarterly-plan" (basename) and "Quarterly
+    // Plan" (title) score identically for "quartely plan" and tie on
+    // length (14 chars each), so the candidate sort's final clause,
+    // `String.prototype.localeCompare`, decides the order — that's ICU
+    // collation, not byte order. If a Node/ICU upgrade ever flips this to
+    // "basename", that's the mechanism to look at, not a scoring bug.
+    assert.deepEqual(broken[0].suggestions, [
+      {
+        filePath: "quarterly-plan.md",
+        candidate: "Quarterly Plan",
+        kind: "title",
+        similarity: 0.8148148148148148,
+        proposedAlias: "quartely plan",
+      },
+      {
+        filePath: "quarterly-review.md",
+        candidate: "Quarterly Review",
+        kind: "title",
+        similarity: 0.41379310344827586,
+        proposedAlias: "quartely plan",
+      },
+    ]);
+
+    assert.deepEqual(broken[1].suggestions, [
+      {
+        filePath: "annual-report.md",
+        candidate: "Annual Report",
+        kind: "title",
+        similarity: 0.6666666666666666,
+        proposedAlias: "anual repot",
+      },
+    ]);
+  });
 });
 
 describe("lintVault", () => {
@@ -841,5 +906,254 @@ describe("walkMarkdown (security)", () => {
         `walker should not have descended into the symlinked dir; saw: ${s}`
       );
     }
+  });
+});
+
+describe("walkMarkdown (git worktree skipping)", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-lint-worktree-"));
+  });
+
+  it("matches multi-segment skipDirs entries at depth", () => {
+    write(dir, "sub/.claude/worktrees/a/n.md", "Body");
+    write(dir, "sub/real.md", "Body");
+    const files = readVaultFiles(dir, [".git", "node_modules", ".claude/worktrees"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["sub/real.md"]
+    );
+  });
+
+  it("skips a .worktrees skipDirs entry", () => {
+    write(dir, "b.md", "Body");
+    write(dir, ".worktrees/wt2/b.md", "Duplicate");
+    const files = readVaultFiles(dir, [".git", "node_modules", ".worktrees"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["b.md"]
+    );
+  });
+
+  it("lints exactly the real file when a .claude/worktrees copy duplicates the vault", () => {
+    write(dir, "notes/a.md", "---\ntitle: A\n---\nReal body\n\n[[b]]");
+    write(dir, "notes/b.md", "---\ntitle: B\n---\nReal body");
+    // The worktree copy links a target that exists nowhere in the vault
+    // (real or copy). If the copy were walked despite skipDirs, this link
+    // would resolve to nothing and report.summary.broken would be > 0 —
+    // making that assertion actually load-bearing instead of trivially
+    // true (a copy of `[[b]]` would resolve fine either way).
+    write(
+      dir,
+      ".claude/worktrees/wt1/notes/a.md",
+      "---\ntitle: A\n---\nDuplicate body\n\n[[only-in-worktree-target]]"
+    );
+    write(dir, ".claude/worktrees/wt1/notes/b.md", "---\ntitle: B\n---\nDuplicate body");
+    const cfg = makeConfig(dir, { skipDirs: [".git", "node_modules", ".claude/worktrees"] });
+    const report = lintVault(cfg);
+    assert.equal(
+      report.warnings.some((w) => w.includes("share normalised key")),
+      false,
+      "worktree copy must not surface as a duplicate-key collision"
+    );
+    assert.equal(report.summary.broken, 0);
+    const files = readVaultFiles(dir, cfg.lint.skipDirs, () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["notes/a.md", "notes/b.md"]
+    );
+  });
+
+  it("lints exactly the real file when a .venv site-packages copy collides on basename", async () => {
+    // Uses real production defaults (via loadConfig, no .vault-tasks.toml
+    // present) rather than makeConfig's stripped-down skipDirs, so this
+    // actually exercises DEFAULT_LINT.skipDirs — a Python virtualenv's
+    // site-packages can ship its own markdown (e.g. a package's AGENTS.md)
+    // that collides on basename with real vault notes.
+    const { loadConfig } = await import("../config.js");
+    write(dir, "notes/a.md", "---\ntitle: A\n---\nReal body\n\n[[b]]");
+    write(dir, "notes/b.md", "---\ntitle: B\n---\nReal body");
+    write(dir, ".venv/lib/site-packages/pkg/b.md", "Some unrelated package markdown");
+    const cfg = loadConfig(dir);
+    const report = lintVault(cfg);
+    assert.equal(
+      report.warnings.some((w) => w.includes("share normalised key")),
+      false,
+      ".venv copy must not surface as a basename collision"
+    );
+    assert.equal(report.summary.broken, 0);
+    const files = readVaultFiles(dir, cfg.lint.skipDirs, () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["notes/a.md", "notes/b.md"]
+    );
+  });
+
+  it("skips a subdirectory that contains a .git regular file (a git worktree)", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: /elsewhere/.git/worktrees/foo\n");
+    write(dir, "real.md", "Body");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["real.md"]
+    );
+  });
+
+  it("walks a directory whose .git file points at a submodule gitdir, not a worktree", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: ../.git/modules/x\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("skips a worktree-shaped .git file using backslash separators", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: C:\\repo\\.git\\worktrees\\wt1\n");
+    write(dir, "real.md", "Body");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["real.md"]
+    );
+  });
+
+  it("walks a submodule literally named 'worktrees' (last segment, not penultimate)", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: ../.git/modules/worktrees\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("walks a submodule mounted at a superproject path named 'worktrees' (gitdir: .../modules/worktrees/foo)", () => {
+    // CodeRabbit finding on PR #31: a submodule at superproject path
+    // "worktrees/<name>" has gitdir ".../modules/worktrees/<name>" — the
+    // penultimate segment is "worktrees", so the old penultimate-only check
+    // misclassified it as a worktree and silently dropped its content. The
+    // segment before "worktrees" here is "modules", which is what
+    // distinguishes this from a real worktree marker.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: ../.git/modules/worktrees/foo\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("skips a worktree of a submodule (gitdir: .../modules/x/worktrees/y)", () => {
+    // Regression lock: unlike the submodule-mounted-at-"worktrees" case
+    // above, here "worktrees" is the checkout's OWN worktree segment (the
+    // submodule is named "x", not "worktrees") — this is a real worktree,
+    // just of a submodule instead of the main repo, and must still be
+    // skipped like any other worktree.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: ../.git/modules/x/worktrees/y\n");
+    write(dir, "real.md", "Body");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["real.md"]
+    );
+  });
+
+  it("walks a directory whose .git file has no gitdir: line (fails open)", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "not a real git file\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("walks a directory whose .git file has a gitdir: line that isn't the first line (fails open)", () => {
+    // Git itself only ever writes the worktree marker with "gitdir: <path>"
+    // as the file's first line. A malformed or coincidental file with a
+    // gitdir-shaped line further down must not classify as a worktree.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(
+      join(dir, "foo", ".git"),
+      "not a marker\ngitdir: /elsewhere/.git/worktrees/wt1\n"
+    );
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("walks a directory whose .git file exceeds the size cap (fails open, never reads it fully)", () => {
+    write(dir, "foo/c.md", "Body");
+    // A real worktree marker is a single short line. An oversized file named
+    // `.git` (70KB, well past the 64KB cap) must not be read into memory —
+    // it fails open and the directory is walked normally.
+    const huge = `gitdir: /elsewhere/.git/worktrees/foo\n${"x".repeat(70_000)}`;
+    writeFileSync(join(dir, "foo", ".git"), huge);
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("walks a directory whose .git file is missing the space after 'gitdir:' (fails open)", () => {
+    // CodeRabbit round 3 on PR #31: git's read_gitfile_gently requires the
+    // exact 8-byte prefix "gitdir: " (colon AND a space). A marker missing
+    // the space is not one git wrote, so it must not classify as a
+    // worktree.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir:/elsewhere/.git/worktrees/wt1\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("walks a directory whose .git file has leading whitespace before 'gitdir:' (fails open)", () => {
+    // Same rationale: git never writes leading whitespace before the
+    // "gitdir: " prefix, so a line that has it isn't a marker git wrote.
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "  gitdir: /elsewhere/.git/worktrees/wt1\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("emits no warning for a skipped worktree directory", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: /elsewhere/.git/worktrees/foo\n");
+    const warnings: string[] = [];
+    readVaultFiles(dir, [".git", "node_modules"], (m) => warnings.push(m));
+    assert.deepEqual(warnings, []);
+  });
+
+  it("still walks the vault root even when the root itself is a git worktree (.git file)", () => {
+    write(dir, "root.md", "Body");
+    write(dir, "sub/nested.md", "Body");
+    writeFileSync(join(dir, ".git"), "gitdir: /elsewhere/.git/worktrees/main\n");
+    // Deliberately omit ".git" from skipDirs so the assertion proves the
+    // vaultRoot exemption itself, not skipDirs pruning it.
+    const files = readVaultFiles(dir, ["node_modules"], () => {});
+    assert.deepEqual(files.map((f) => f.relPath).sort(), ["root.md", "sub/nested.md"]);
+  });
+
+  it("does not treat a directory as a worktree merely because it contains a .git directory (a real nested repo)", () => {
+    write(dir, "foo/c.md", "Body");
+    mkdirSync(join(dir, "foo", ".git"), { recursive: true });
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
   });
 });
