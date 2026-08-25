@@ -843,3 +843,89 @@ describe("walkMarkdown (security)", () => {
     }
   });
 });
+
+describe("walkMarkdown (git worktree skipping)", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "vt-lint-worktree-"));
+  });
+
+  it("matches multi-segment skipDirs entries at depth", () => {
+    write(dir, "sub/.claude/worktrees/a/n.md", "Body");
+    write(dir, "sub/real.md", "Body");
+    const files = readVaultFiles(dir, [".git", "node_modules", ".claude/worktrees"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["sub/real.md"]
+    );
+  });
+
+  it("skips a .worktrees skipDirs entry", () => {
+    write(dir, "b.md", "Body");
+    write(dir, ".worktrees/wt2/b.md", "Duplicate");
+    const files = readVaultFiles(dir, [".git", "node_modules", ".worktrees"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["b.md"]
+    );
+  });
+
+  it("lints exactly the real file when a .claude/worktrees copy duplicates the vault", () => {
+    write(dir, "notes/a.md", "---\ntitle: A\n---\nReal body\n\n[[b]]");
+    write(dir, "notes/b.md", "---\ntitle: B\n---\nReal body");
+    write(dir, ".claude/worktrees/wt1/notes/a.md", "---\ntitle: A\n---\nDuplicate body\n\n[[b]]");
+    write(dir, ".claude/worktrees/wt1/notes/b.md", "---\ntitle: B\n---\nDuplicate body");
+    const cfg = makeConfig(dir, { skipDirs: [".git", "node_modules", ".claude/worktrees"] });
+    const report = lintVault(cfg);
+    assert.equal(
+      report.warnings.some((w) => w.includes("share normalised key")),
+      false,
+      "worktree copy must not surface as a duplicate-key collision"
+    );
+    assert.equal(report.summary.broken, 0);
+    const files = readVaultFiles(dir, cfg.lint.skipDirs, () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["notes/a.md", "notes/b.md"]
+    );
+  });
+
+  it("skips a subdirectory that contains a .git regular file (a git worktree)", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: /elsewhere/.git/worktrees/foo\n");
+    write(dir, "real.md", "Body");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["real.md"]
+    );
+  });
+
+  it("emits no warning for a skipped worktree directory", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: /elsewhere/.git/worktrees/foo\n");
+    const warnings: string[] = [];
+    readVaultFiles(dir, [".git", "node_modules"], (m) => warnings.push(m));
+    assert.deepEqual(warnings, []);
+  });
+
+  it("still walks the vault root even when the root itself is a git worktree (.git file)", () => {
+    write(dir, "root.md", "Body");
+    write(dir, "sub/nested.md", "Body");
+    writeFileSync(join(dir, ".git"), "gitdir: /elsewhere/.git/worktrees/main\n");
+    // Deliberately omit ".git" from skipDirs so the assertion proves the
+    // vaultRoot exemption itself, not skipDirs pruning it.
+    const files = readVaultFiles(dir, ["node_modules"], () => {});
+    assert.deepEqual(files.map((f) => f.relPath).sort(), ["root.md", "sub/nested.md"]);
+  });
+
+  it("does not treat a directory as a worktree merely because it contains a .git directory (a real nested repo)", () => {
+    write(dir, "foo/c.md", "Body");
+    mkdirSync(join(dir, "foo", ".git"), { recursive: true });
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+});

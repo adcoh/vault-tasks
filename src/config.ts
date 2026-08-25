@@ -123,7 +123,15 @@ const DEFAULT_LINT: LintConfig = {
   templateSourceDirs: [".claude/skills/", ".claude/rules/"],
   templateSourceFiles: ["CLAUDE.md"],
   templatePatterns: [...DEFAULT_LINT_TEMPLATE_PATTERNS],
-  skipDirs: [".obsidian", "node_modules", ".git", "dist", "build"],
+  skipDirs: [
+    ".obsidian",
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    ".claude/worktrees",
+    ".worktrees",
+  ],
   evergreenConventions: {
     requireFrontmatter: true,
     requireTitleField: true,

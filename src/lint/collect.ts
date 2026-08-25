@@ -58,6 +58,22 @@ function pathHitsSkipDir(relPosix: string, skipDirs: string[]): boolean {
 }
 
 /**
+ * A git *worktree* checkout has a `.git` regular file (containing a `gitdir:`
+ * pointer back at the real repo's `.git/worktrees/<name>` dir) where a normal
+ * repo root has a `.git` directory. Agent tooling (Claude Code worktrees,
+ * etc.) commonly leaves dozens of these alongside a vault; walking into them
+ * duplicates every file they contain. Missing `.git` is the overwhelmingly
+ * common case (not a worktree) and must not warn.
+ */
+function isGitWorktreeCheckout(dirAbs: string): boolean {
+  try {
+    return lstatSync(join(dirAbs, ".git")).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Recursively walk the vault and yield .md files, respecting skipDirs.
  *
  * Symlinks are deliberately NOT followed: a symlinked directory inside the
@@ -111,6 +127,11 @@ export function walkMarkdown(
 
       if (pathHitsSkipDir(rel, skipDirs)) continue;
       if (st.isDirectory()) {
+        // A git-worktree checkout, never the vault root itself (that case is
+        // the initial `recurse(vaultRoot)` call below, which does not pass
+        // through this per-entry check) — a vault rooted in a worktree must
+        // still be walked in full.
+        if (isGitWorktreeCheckout(abs)) continue;
         recurse(abs);
       } else if (st.isFile() && name.endsWith(".md")) {
         out.push(abs);
