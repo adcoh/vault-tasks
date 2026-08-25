@@ -22,10 +22,8 @@ interface Candidate {
   text: string;
   kind: "basename" | "title" | "alias";
   filePath: string;
-  /** Trigram set of `text`, precomputed once so the per-entry scoring loop
-   * (O(entries × candidates)) never re-normalizes/re-trigrams a candidate
-   * string more than once regardless of how many broken entries it's
-   * compared against. */
+  /** Trigram set of `text`, precomputed once and reused across every broken
+   * entry's scoring pass. */
   trigrams: Set<string>;
 }
 

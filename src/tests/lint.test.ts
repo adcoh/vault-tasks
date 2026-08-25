@@ -485,6 +485,13 @@ describe("attachSuggestions", () => {
 
     attachSuggestions(broken, idx, 0.3);
 
+    // The `kind: "title"` pick below is a locale-sensitive tie-break, not
+    // an arbitrary encoding: "quarterly-plan" (basename) and "Quarterly
+    // Plan" (title) score identically for "quartely plan" and tie on
+    // length (14 chars each), so the candidate sort's final clause,
+    // `String.prototype.localeCompare`, decides the order — that's ICU
+    // collation, not byte order. If a Node/ICU upgrade ever flips this to
+    // "basename", that's the mechanism to look at, not a scoring bug.
     assert.deepEqual(broken[0].suggestions, [
       {
         filePath: "quarterly-plan.md",
@@ -931,7 +938,16 @@ describe("walkMarkdown (git worktree skipping)", () => {
   it("lints exactly the real file when a .claude/worktrees copy duplicates the vault", () => {
     write(dir, "notes/a.md", "---\ntitle: A\n---\nReal body\n\n[[b]]");
     write(dir, "notes/b.md", "---\ntitle: B\n---\nReal body");
-    write(dir, ".claude/worktrees/wt1/notes/a.md", "---\ntitle: A\n---\nDuplicate body\n\n[[b]]");
+    // The worktree copy links a target that exists nowhere in the vault
+    // (real or copy). If the copy were walked despite skipDirs, this link
+    // would resolve to nothing and report.summary.broken would be > 0 —
+    // making that assertion actually load-bearing instead of trivially
+    // true (a copy of `[[b]]` would resolve fine either way).
+    write(
+      dir,
+      ".claude/worktrees/wt1/notes/a.md",
+      "---\ntitle: A\n---\nDuplicate body\n\n[[only-in-worktree-target]]"
+    );
     write(dir, ".claude/worktrees/wt1/notes/b.md", "---\ntitle: B\n---\nDuplicate body");
     const cfg = makeConfig(dir, { skipDirs: [".git", "node_modules", ".claude/worktrees"] });
     const report = lintVault(cfg);
@@ -1018,6 +1034,20 @@ describe("walkMarkdown (git worktree skipping)", () => {
   it("walks a directory whose .git file has no gitdir: line (fails open)", () => {
     write(dir, "foo/c.md", "Body");
     writeFileSync(join(dir, "foo", ".git"), "not a real git file\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("walks a directory whose .git file exceeds the size cap (fails open, never reads it fully)", () => {
+    write(dir, "foo/c.md", "Body");
+    // A real worktree marker is <200 bytes. A oversized regular file named
+    // `.git` (70KB, well past the 64KB cap) must not be read into memory —
+    // it fails open and the directory is walked normally.
+    const huge = `gitdir: /elsewhere/.git/worktrees/foo\n${"x".repeat(70_000)}`;
+    writeFileSync(join(dir, "foo", ".git"), huge);
     const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
     assert.deepEqual(
       files.map((f) => f.relPath),

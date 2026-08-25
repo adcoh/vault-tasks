@@ -127,4 +127,14 @@ describe("similarityFromSets / trigramsOf equivalence with similarity()", () => 
     assert.ok(s instanceof Set);
     assert.ok(s.size > 0);
   });
+
+  it("computes an exact literal Dice coefficient for a mid-range pair", () => {
+    // The pairs above are differential (new API vs old API) and would stay
+    // green through a lockstep bug affecting both equally. Pin one absolute
+    // value: 13 and 14 trigrams, 11 shared -> 22/27.
+    assert.equal(
+      similarityFromSets(trigramsOf("quartely plan"), trigramsOf("Quarterly Plan")),
+      0.8148148148148148
+    );
+  });
 });

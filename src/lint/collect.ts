@@ -73,17 +73,24 @@ function pathHitsSkipDir(relPosix: string, skipDirs: string[]): boolean {
  * of `/` and `\` separators and relative or absolute paths.
  *
  * This is deliberately fail-open: a `.git` file with no `gitdir:` line, an
- * unreadable file, or any shape that isn't unambiguously `.../worktrees/*`
- * is walked normally. A wrongly-walked exotic worktree only costs perf; a
- * wrongly-skipped submodule is silent data loss, which is the worse failure
- * mode. Missing `.git` entirely is the overwhelmingly common case (not a
- * worktree) and must not warn.
+ * unreadable file, one over {@link GIT_MARKER_MAX_BYTES}, or any shape that
+ * isn't unambiguously `.../worktrees/*` is walked normally. A wrongly-walked
+ * exotic worktree only costs perf; a wrongly-skipped submodule is silent
+ * data loss, which is the worse failure mode. Missing `.git` entirely is the
+ * overwhelmingly common case (not a worktree) and must not warn.
  */
+const GIT_MARKER_MAX_BYTES = 65536;
+
 function isGitWorktreeCheckout(dirAbs: string): boolean {
   const gitPath = join(dirAbs, ".git");
   let content: string;
   try {
-    if (!lstatSync(gitPath).isFile()) return false;
+    const st = lstatSync(gitPath);
+    if (!st.isFile()) return false;
+    // A real worktree marker is a single short line (<200 bytes). A
+    // pathological vault could have a huge regular file literally named
+    // `.git`; don't read it fully into memory to find out it isn't one.
+    if (st.size > GIT_MARKER_MAX_BYTES) return false;
     content = readFileSync(gitPath, "utf-8");
   } catch {
     return false;

@@ -37,7 +37,7 @@ function trigrams(s: string): Set<string> {
  * Compute the Dice coefficient between two trigram sets.
  * Returns a value between 0.0 (completely different) and 1.0 (identical).
  */
-function diceCoefficient(a: Set<string>, b: Set<string>): number {
+function diceCoefficient(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
   if (a.size === 0 && b.size === 0) return 1.0;
   if (a.size === 0 || b.size === 0) return 0.0;
 
@@ -84,6 +84,6 @@ export function trigramsOf(s: string): Set<string> {
  * two such strings give 1.0 (both empty) and one-empty-one-nonempty gives
  * 0.0, matching `similarity`'s short-circuit behavior.
  */
-export function similarityFromSets(a: Set<string>, b: Set<string>): number {
+export function similarityFromSets(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
   return diceCoefficient(a, b);
 }
