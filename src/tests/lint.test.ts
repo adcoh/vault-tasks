@@ -901,6 +901,47 @@ describe("walkMarkdown (git worktree skipping)", () => {
     );
   });
 
+  it("walks a directory whose .git file points at a submodule gitdir, not a worktree", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: ../.git/modules/x\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("skips a worktree-shaped .git file using backslash separators", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: C:\\repo\\.git\\worktrees\\wt1\n");
+    write(dir, "real.md", "Body");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["real.md"]
+    );
+  });
+
+  it("walks a submodule literally named 'worktrees' (last segment, not penultimate)", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "gitdir: ../.git/modules/worktrees\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
+  it("walks a directory whose .git file has no gitdir: line (fails open)", () => {
+    write(dir, "foo/c.md", "Body");
+    writeFileSync(join(dir, "foo", ".git"), "not a real git file\n");
+    const files = readVaultFiles(dir, [".git", "node_modules"], () => {});
+    assert.deepEqual(
+      files.map((f) => f.relPath),
+      ["foo/c.md"]
+    );
+  });
+
   it("emits no warning for a skipped worktree directory", () => {
     write(dir, "foo/c.md", "Body");
     writeFileSync(join(dir, "foo", ".git"), "gitdir: /elsewhere/.git/worktrees/foo\n");

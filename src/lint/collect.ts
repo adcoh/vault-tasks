@@ -58,19 +58,50 @@ function pathHitsSkipDir(relPosix: string, skipDirs: string[]): boolean {
 }
 
 /**
- * A git *worktree* checkout has a `.git` regular file (containing a `gitdir:`
- * pointer back at the real repo's `.git/worktrees/<name>` dir) where a normal
- * repo root has a `.git` directory. Agent tooling (Claude Code worktrees,
- * etc.) commonly leaves dozens of these alongside a vault; walking into them
- * duplicates every file they contain. Missing `.git` is the overwhelmingly
- * common case (not a worktree) and must not warn.
+ * A git *worktree* checkout has a `.git` regular file (containing a single
+ * `gitdir: <path>` line pointing back at the real repo's
+ * `.git/worktrees/<name>` dir) where a normal repo root has a `.git`
+ * directory. Agent tooling (Claude Code worktrees, etc.) commonly leaves
+ * dozens of these alongside a vault; walking into them duplicates every file
+ * they contain.
+ *
+ * A git *submodule* working directory has the exact same `.git`-regular-file
+ * shape, but its gitdir points into `.git/modules/<name>` instead — and a
+ * vault legitimately kept in a submodule must NOT be skipped, or its content
+ * silently vanishes from the audit. The two are distinguished by the
+ * `gitdir:` path's penultimate segment (`worktrees` vs `modules`), tolerant
+ * of `/` and `\` separators and relative or absolute paths.
+ *
+ * This is deliberately fail-open: a `.git` file with no `gitdir:` line, an
+ * unreadable file, or any shape that isn't unambiguously `.../worktrees/*`
+ * is walked normally. A wrongly-walked exotic worktree only costs perf; a
+ * wrongly-skipped submodule is silent data loss, which is the worse failure
+ * mode. Missing `.git` entirely is the overwhelmingly common case (not a
+ * worktree) and must not warn.
  */
 function isGitWorktreeCheckout(dirAbs: string): boolean {
+  const gitPath = join(dirAbs, ".git");
+  let content: string;
   try {
-    return lstatSync(join(dirAbs, ".git")).isFile();
+    if (!lstatSync(gitPath).isFile()) return false;
+    content = readFileSync(gitPath, "utf-8");
   } catch {
     return false;
   }
+
+  const gitdirLine = content.split(/\r?\n/).find((line) => line.trim().startsWith("gitdir:"));
+  if (!gitdirLine) return false;
+
+  const gitdirPath = gitdirLine.trim().slice("gitdir:".length).trim();
+  if (!gitdirPath) return false;
+
+  const segments = gitdirPath
+    .replace(/[/\\]+$/, "")
+    .split(/[/\\]+/)
+    .filter((s) => s.length > 0);
+  if (segments.length < 2) return false;
+
+  return segments[segments.length - 2] === "worktrees";
 }
 
 /**
