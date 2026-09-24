@@ -20,12 +20,16 @@ node dist/cli.js <command>         # run locally
   - `store.ts` — `TaskStore` class: all task CRUD operations
   - `frontmatter.ts` — YAML frontmatter parser/writer
   - `counter.ts` — ID allocation (sequential, timestamp, ulid)
+  - `ulid.ts` — ULID generation
+  - `similarity.ts` — title similarity for `vt new` duplicate warnings
   - `slugify.ts` — title-to-kebab-case
   - `output.ts` — table formatting
   - `index.ts` — public library API exports
   - `commands/` — one file per CLI command
+  - `search/` — BM25 + optional embedding search (`vt search`)
+  - `lint/` — vault lint engine (`vt lint`)
+  - `tests/` — node:test based tests
 - `templates/` — Claude Code skills, rules, and Obsidian Base dashboard
-- `tests/` — node:test based tests
 
 ## Conventions
 

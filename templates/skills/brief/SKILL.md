@@ -51,4 +51,4 @@ Present as a concise briefing, not a wall of text:
 - This is a read-only orientation tool. Don't create or modify files.
 - Prioritize the "pick up where you left off" section — that's the highest-value info at session start.
 - If any step fails (e.g., no build logs exist yet), skip it gracefully.
-- Keep the whole briefing under ~40 lines. Link to sources so the user can drill down.
+- Link to sources so the user can drill down instead of quoting them.

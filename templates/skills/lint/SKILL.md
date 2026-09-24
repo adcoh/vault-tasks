@@ -2,7 +2,7 @@
 name: lint
 description: Audit the vault for orphan notes, broken wikilinks, missing
   concept pages, convention drift, and potential contradictions. Read-only —
-  presents findings, never auto-edits. Use when the user says "lint the
+  presents findings and never edits notes. Use when the user says "lint the
   vault", "health check", "find orphans", or "audit the notes".
 ---
 
@@ -28,14 +28,16 @@ output into a triage.
    - **Missing concept pages** — scan evergreens for bolded terms or
      repeated capitalised phrases that appear in 3+ evergreens but have no
      dedicated note. Suggest candidates.
-   - **Index and log health** — confirm `index.md` lists every evergreen
-     and area; confirm `log.md` has recent entries for recent commits.
+   - **Index and log health** — if the vault has an `index.md`, confirm it
+     lists every evergreen and area; if it has a `log.md`, confirm it has
+     recent entries for recent commits.
    - **Potential contradictions** — optionally, pick 2–3 clusters of
      tightly linked evergreens and read them together; flag claims that
      disagree or overlap awkwardly. Expensive; skip unless asked.
    - **Tag-set drift** — the script checks for presence of `tags:`; it
-     does not check the standard set. Eyeball this against the canonical
-     tag set; flag any evergreen using a tag not in that set.
+     does not check the standard set. Compare against `[project.tags]` in
+     `.vault-tasks.toml`; flag any evergreen using a tag not in that set.
+     Skip this check if `[project.tags]` is not set.
 
 3. Present findings as a single report grouped by category. Lead with the
    `HIGH-LEVERAGE FIXES` section from the script output — these are the
@@ -44,11 +46,12 @@ output into a triage.
    qualitative findings as a separate section. Use wikilinks so the user
    can jump to sources. Do not edit anything.
 
-4. Offer next steps — `/expand` on concept candidates, opening specific
-   files for review, or a follow-up `/lint --scope <dir>` against a
-   specific subtree.
+4. Offer next steps — writing notes for concept candidates, opening
+   specific files for review, or a follow-up `/lint --scope <dir>` against
+   a specific subtree.
 
-5. Append a log entry with the summary line from the CLI:
+5. If the vault has a `log.md`, append a log entry with the summary line
+   from the CLI:
    ```
    ## [YYYY-MM-DD] lint | broken:N orphans:N stale:N drift:N — <one-line note>
    ```
@@ -115,9 +118,8 @@ Exit codes: `0` clean, `1` issues found, `2` configuration or I/O error.
 ## Notes
 
 - **Read-only.** This skill never writes to notes. The only file it may
-  append to is `log.md`.
-- Present findings; let the user decide what to act on. Mirrors the style
-  of `/consolidate`.
+  append to is `log.md`, and only if it already exists.
+- Present findings; let the user decide what to act on.
 - Keep the human-report tight — one line per finding.
 - Default to a full lint. Accept narrowed scope ("just evergreens", "just
   investments") by passing `--scope`.
