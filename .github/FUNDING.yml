@@ -1,0 +1,9 @@
+# Enables the "Sponsor" button on the repo.
+# NOTE: the GitHub Sponsors *program* must be activated separately at
+# github.com/sponsors (profile, tiers, payout/bank) before this resolves.
+github: [adcoh]
+# Optional alternatives once set up:
+# ko_fi: <username>
+# buy_me_a_coffee: <username>
+# polar: <username>
+# custom: ["https://agentvaultkit.gumroad.com/l/iueeo"]
