@@ -4,6 +4,15 @@ All notable changes to this project will be documented here.
 
 ## Unreleased
 
+### Changed
+
+- **`vt search` defaults to BM25.** Recall@5 on the paraphrase eval
+  (`evals/retrieval/`): keyword 0.0, BM25 0.868. BM25 is offline and needs no
+  setup; `semantic`/`hybrid` (1.0 / 0.972) stay opt-in via `--mode` because they
+  need an embedding engine. Substring matching is still `--mode keyword`.
+  `--like <id>` no longer needs `--mode`. The library's `searchTasks()` default
+  is unchanged (`keyword`).
+
 ### Fixed
 
 - **Frontmatter round trip** (found by the new seeded property test,
