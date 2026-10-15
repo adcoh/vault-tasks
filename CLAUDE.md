@@ -9,6 +9,7 @@ npm install          # install dev deps (typescript, @types/node)
 npx tsc              # build
 npm test                           # run tests (scripts/run-tests.mjs)
 npm run eval:retrieval             # search-quality eval (evals/retrieval/README.md)
+node scripts/state-of-vt.mjs       # outcome snapshot (downloads, issues, CI, eval) for /state-of-vt
 node dist/cli.js <command>         # run locally
 ```
 
