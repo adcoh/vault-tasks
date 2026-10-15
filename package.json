@@ -31,6 +31,7 @@
     "build": "tsc",
     "build:wheel": "tsc && node scripts/build-wheel.mjs",
     "test": "node scripts/run-tests.mjs",
+    "eval:retrieval": "node evals/retrieval/run.mjs",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "check": "biome check .",

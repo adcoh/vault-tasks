@@ -26,6 +26,14 @@ All notable changes to this project will be documented here.
 - **Windows: `npm test`.** The test glob was not expanded by `cmd.exe` and
   Node 20 does not glob `--test` args; tests now run via `scripts/run-tests.mjs`.
 
+### Added
+
+- **Retrieval eval** (`npm run eval:retrieval`): 53 labelled paraphrase
+  queries over a 60-task synthetic fixture vault, reporting recall@1/@5 and
+  MRR per search mode. Baseline: BM25 recall@5 0.868, in-process MiniLM
+  semantic 1.000. CI fails if BM25 recall@5 drops more than 0.02 below
+  `evals/retrieval/baseline.json`.
+
 ### Changed
 
 - CI runs build and tests on `ubuntu-latest`, `windows-latest` and

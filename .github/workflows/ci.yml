@@ -58,5 +58,8 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Retrieval eval gate (BM25 recall@5 vs evals/retrieval/baseline.json)
+        run: npm run eval:retrieval -- --check
+
       - name: Verify package contents
         run: npm pack --dry-run

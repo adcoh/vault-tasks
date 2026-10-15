@@ -8,6 +8,7 @@ Zero-dependency CLI + library for managing tasks as markdown files. Built for so
 npm install          # install dev deps (typescript, @types/node)
 npx tsc              # build
 npm test                           # run tests (scripts/run-tests.mjs)
+npm run eval:retrieval             # search-quality eval (evals/retrieval/README.md)
 node dist/cli.js <command>         # run locally
 ```
 
