@@ -12,7 +12,8 @@
  * that subtree to look broken just because their target is outside it.
  */
 
-import { relative, sep } from "node:path";
+import { sep } from "node:path";
+import { toRelPosix } from "../paths.js";
 import type { Config } from "../config.js";
 import { findBrokenLinks } from "./checks/broken.js";
 import { findEvergreenDrift } from "./checks/drift.js";
@@ -38,10 +39,6 @@ export { findStaleReferences } from "./checks/stale.js";
 export { findEvergreenDrift } from "./checks/drift.js";
 export { attachSuggestions, computeLeverageFixes } from "./suggest.js";
 export { formatHumanReport, formatJsonReport, formatSummaryLine } from "./report.js";
-
-function toRelPosix(absPath: string, vaultRoot: string): string {
-  return relative(vaultRoot, absPath).split(sep).join("/");
-}
 
 function relPathPosix(p: string): string {
   return p.split(sep).join("/");

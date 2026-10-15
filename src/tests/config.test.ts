@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { parseToml, loadConfig, findConfigFile } from "../config.js";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { tmpdir } from "node:os";
 
 describe("parseToml", () => {
@@ -140,8 +140,8 @@ describe("loadConfig", () => {
     const config = loadConfig(dir);
     assert.equal(config.vaultRoot, dir);
     // backlogDir should be absolute, not relative
-    assert.ok(config.backlogDir.startsWith("/"), "backlogDir should be absolute");
-    assert.ok(config.archiveDir.startsWith("/"), "archiveDir should be absolute");
+    assert.ok(isAbsolute(config.backlogDir), "backlogDir should be absolute");
+    assert.ok(isAbsolute(config.archiveDir), "archiveDir should be absolute");
   });
 
   it("returns default vault structure paths when no config", () => {
@@ -192,6 +192,12 @@ describe("loadConfig", () => {
 
     writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\nevergreen_dir = "../../etc"');
     assert.throws(() => loadConfig(dir), /evergreen_dir must be inside the vault root/);
+  });
+
+  it("accepts a dir whose name merely starts with '..' (regression)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "vt-cfg-"));
+    writeFileSync(join(dir, ".vault-tasks.toml"), '[paths]\nbacklog_dir = "..notes"');
+    assert.equal(loadConfig(dir).backlogDir, join(dir, "..notes"));
   });
 
   it("returns local-first search defaults when no [search] section is present", () => {

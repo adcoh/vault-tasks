@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented here.
 
+## Unreleased
+
+### Fixed
+
+- **Windows: config path containment.** A `[paths]` dir on another drive
+  (`D:/x`) or a UNC share passed the "must be inside the vault root" check,
+  because `relative()` returns an absolute path there instead of `..`. A dir
+  literally named `..notes` was wrongly rejected on every OS.
+- **Windows: skill placeholders.** `vt install-skills` substituted
+  `{{backlog_dir}}` etc. with backslash paths; they are now `/`-separated.
+- **Windows: `npm test`.** The test glob was not expanded by `cmd.exe` and
+  Node 20 does not glob `--test` args; tests now run via `scripts/run-tests.mjs`.
+
+### Changed
+
+- CI runs build and tests on `ubuntu-latest`, `windows-latest` and
+  `macos-latest` (Node 20 and 22).
+
 ## 0.6.0
 
 ### Added

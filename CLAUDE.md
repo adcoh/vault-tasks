@@ -7,7 +7,7 @@ Zero-dependency CLI + library for managing tasks as markdown files. Built for so
 ```bash
 npm install          # install dev deps (typescript, @types/node)
 npx tsc              # build
-node --test dist/tests/*.test.js   # run tests
+npm test                           # run tests (scripts/run-tests.mjs)
 node dist/cli.js <command>         # run locally
 ```
 
@@ -23,6 +23,7 @@ node dist/cli.js <command>         # run locally
   - `ulid.ts` — ULID generation
   - `similarity.ts` — title similarity for `vt new` duplicate warnings
   - `slugify.ts` — title-to-kebab-case
+  - `paths.ts` — cross-platform containment (`isInsideRoot`) and posix-relative paths
   - `output.ts` — table formatting
   - `index.ts` — public library API exports
   - `commands/` — one file per CLI command

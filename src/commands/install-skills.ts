@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { toRelPosix } from "../paths.js";
 import { fileURLToPath } from "node:url";
 import type { Config } from "../config.js";
 
@@ -98,10 +99,10 @@ export function cmdInstallSkills(
 ): void {
   const available = listAvailable();
   const placeholders: [RegExp, string][] = [
-    [/\{\{backlog_dir\}\}/g, relative(config.vaultRoot, config.backlogDir)],
-    [/\{\{journal_dir\}\}/g, relative(config.vaultRoot, config.journalDir)],
-    [/\{\{projects_dir\}\}/g, relative(config.vaultRoot, config.projectsDir)],
-    [/\{\{evergreen_dir\}\}/g, relative(config.vaultRoot, config.evergreenDir)],
+    [/\{\{backlog_dir\}\}/g, toRelPosix(config.backlogDir, config.vaultRoot)],
+    [/\{\{journal_dir\}\}/g, toRelPosix(config.journalDir, config.vaultRoot)],
+    [/\{\{projects_dir\}\}/g, toRelPosix(config.projectsDir, config.vaultRoot)],
+    [/\{\{evergreen_dir\}\}/g, toRelPosix(config.evergreenDir, config.vaultRoot)],
   ];
 
   function substitute(text: string): string {

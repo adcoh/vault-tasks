@@ -30,7 +30,7 @@
   "scripts": {
     "build": "tsc",
     "build:wheel": "tsc && node scripts/build-wheel.mjs",
-    "test": "node --test dist/tests/*.test.js",
+    "test": "node scripts/run-tests.mjs",
     "format": "biome format --write .",
     "lint": "biome lint .",
     "check": "biome check .",
