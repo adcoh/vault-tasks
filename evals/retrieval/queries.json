@@ -1,0 +1,217 @@
+[
+  {
+    "query": "reset link ends up in junk folder",
+    "expected": ["0001-password-reset-emails-land-in-spam-for-gmail-users.md"]
+  },
+  {
+    "query": "authenticator app second factor",
+    "expected": ["0002-add-totp-two-factor-login.md"]
+  },
+  {
+    "query": "cookie cross-site attribute",
+    "expected": ["0003-session-cookie-missing-samesite-attribute.md"]
+  },
+  {
+    "query": "apple id login for iphone people",
+    "expected": ["0004-sign-in-with-apple-for-ios-users.md"]
+  },
+  {
+    "query": "throttle brute force password guessing",
+    "expected": ["0005-rate-limit-the-login-endpoint.md"]
+  },
+  {
+    "query": "lost my streak because of time zone",
+    "expected": ["0006-streak-counter-resets-at-midnight-utc-instead-of-local-time.md"]
+  },
+  {
+    "query": "clocks go back counted twice",
+    "expected": ["0007-daylight-saving-change-double-counts-a-check-in.md"]
+  },
+  {
+    "query": "habit target a few times a week instead of every day",
+    "expected": ["0008-weekly-habits-allow-3x-per-week-targets.md"]
+  },
+  {
+    "query": "hide a habit but keep its past data",
+    "expected": ["0009-archive-habits-without-deleting-history.md"]
+  },
+  {
+    "query": "remind me to do my habit on my phone",
+    "expected": [
+      "0010-habit-reminders-via-push-notifications.md",
+      "0011-reminder-notifications-fire-twice-on-android.md"
+    ]
+  },
+  {
+    "query": "android gets duplicate reminders",
+    "expected": ["0011-reminder-notifications-fire-twice-on-android.md"]
+  },
+  {
+    "query": "sunday summary email",
+    "expected": ["0012-email-digest-of-weekly-progress.md"]
+  },
+  {
+    "query": "do not disturb at night",
+    "expected": ["0013-quiet-hours-for-notifications.md"]
+  },
+  {
+    "query": "phone offline then laptop overwrote my checkin",
+    "expected": ["0014-offline-check-ins-sync-conflict.md"]
+  },
+  {
+    "query": "deleted habit on another device crashes sync",
+    "expected": ["0015-sync-api-returns-500-when-payload-has-unknown-habit-id.md"]
+  },
+  {
+    "query": "only upload changes since last sync",
+    "expected": ["0016-delta-sync-instead-of-full-snapshot.md"]
+  },
+  {
+    "query": "download my history into excel",
+    "expected": ["0017-export-data-as-csv.md"]
+  },
+  {
+    "query": "right to be forgotten",
+    "expected": ["0018-gdpr-data-export-and-account-deletion.md"]
+  },
+  {
+    "query": "switching from loop app",
+    "expected": ["0019-import-from-loop-habit-tracker-backup.md"]
+  },
+  {
+    "query": "too many clients postgres",
+    "expected": ["0020-postgres-connection-pool-exhausted-under-load.md"]
+  },
+  {
+    "query": "stats page slow sequential scan",
+    "expected": ["0021-add-index-on-checkinsuserid-day.md"]
+  },
+  {
+    "query": "pg_dump to bucket every night",
+    "expected": ["0022-nightly-database-backups-to-object-storage.md"]
+  },
+  {
+    "query": "move hosting off heroku",
+    "expected": ["0023-migrate-from-heroku-to-flyio.md"]
+  },
+  {
+    "query": "deploy without dropping requests",
+    "expected": ["0024-zero-downtime-deploys.md"]
+  },
+  {
+    "query": "pipeline is slow reinstalling node_modules",
+    "expected": ["0025-ci-takes-14-minutes-cache-dependencies.md"]
+  },
+  {
+    "query": "playwright test fails randomly",
+    "expected": ["0026-flaky-end-to-end-test-for-the-onboarding-flow.md"]
+  },
+  {
+    "query": "no tests for streak logic",
+    "expected": ["0027-add-unit-tests-for-streak-calculation.md"]
+  },
+  {
+    "query": "windows runner in the pipeline",
+    "expected": ["0028-run-tests-on-windows-in-ci.md"]
+  },
+  {
+    "query": "night theme",
+    "expected": ["0029-dark-mode.md"]
+  },
+  {
+    "query": "red green colour blindness",
+    "expected": ["0030-charts-are-unreadable-for-colour-blind-users.md"]
+  },
+  {
+    "query": "arrow keys to move between days",
+    "expected": ["0031-keyboard-navigation-for-the-habit-grid.md"]
+  },
+  {
+    "query": "marketing page bundle too big lighthouse",
+    "expected": ["0032-landing-page-loads-2-mb-of-javascript.md"]
+  },
+  {
+    "query": "empty screen for new users",
+    "expected": ["0033-onboarding-suggest-starter-habits.md"]
+  },
+  {
+    "query": "stripe sends the same event twice",
+    "expected": ["0035-stripe-webhook-retries-create-duplicate-subscriptions.md"]
+  },
+  {
+    "query": "yearly pricing",
+    "expected": ["0036-annual-plan-with-discount.md"]
+  },
+  {
+    "query": "card declined on renewal",
+    "expected": ["0037-handle-failed-card-payments-gracefully.md"]
+  },
+  {
+    "query": "european sales tax",
+    "expected": ["0038-vat-for-eu-customers.md"]
+  },
+  {
+    "query": "check in from the terminal",
+    "expected": ["0039-cli-tally-log-command.md"]
+  },
+  {
+    "query": "notepad line endings break config",
+    "expected": ["0040-cli-crashes-when-config-file-has-crlf-line-endings.md"]
+  },
+  {
+    "query": "tab completion zsh",
+    "expected": ["0041-cli-shell-completion-for-bash-and-zsh.md"]
+  },
+  {
+    "query": "api keys for scripts",
+    "expected": ["0042-personal-access-tokens-for-the-api.md"]
+  },
+  {
+    "query": "openapi docs",
+    "expected": ["0043-public-rest-api-documentation.md"]
+  },
+  {
+    "query": "exception monitoring",
+    "expected": ["0044-error-tracking-with-sentry.md"]
+  },
+  {
+    "query": "queryable logs with request id",
+    "expected": ["0045-structured-json-logging.md"]
+  },
+  {
+    "query": "on-call paging",
+    "expected": ["0046-uptime-alerting-goes-to-email-nobody-reads.md"]
+  },
+  {
+    "query": "runtime end of life upgrade",
+    "expected": ["0047-upgrade-to-node-22.md"]
+  },
+  {
+    "query": "vulnerable packages npm audit",
+    "expected": ["0048-dependency-audit-3-high-severity-advisories.md"]
+  },
+  {
+    "query": "csp blocking script",
+    "expected": ["0049-content-security-policy-blocks-the-analytics-script.md"]
+  },
+  {
+    "query": "activation metric by cohort",
+    "expected": ["0051-track-activation-users-who-log-3-days-in-first-week.md"]
+  },
+  {
+    "query": "accountability buddy",
+    "expected": ["0054-shared-habits-with-a-partner.md"]
+  },
+  {
+    "query": "monday vs sunday first day of week",
+    "expected": ["0056-week-starts-on-sunday-for-us-users.md"]
+  },
+  {
+    "query": "blurry launcher icon",
+    "expected": ["0059-app-icon-looks-blurry-on-android-home-screen.md"]
+  },
+  {
+    "query": "remove old toggles",
+    "expected": ["0060-clean-up-feature-flags-that-shipped-a-year-ago.md"]
+  }
+]

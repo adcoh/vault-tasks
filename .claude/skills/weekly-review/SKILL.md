@@ -40,7 +40,7 @@ This skill runs the full knowledge extraction pipeline. It can be invoked manual
    - End with a **Related** section
 
 6. **Create backlog tasks** — for each open thread:
-   - Search existing backlog: `vt search "<keywords>"`
+   - Search existing backlog: `vt search "<keywords>"` (BM25-ranked; judge the top hits — any shared word returns a match)
    - If no match: `vt new "<item>" --priority medium --source "[[YYYY-MM-DD Weekly Review]]"`
    - If thread appeared in 2+ entries, use `--priority high`
 

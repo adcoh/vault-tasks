@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented here.
 
+## Unreleased
+
+### Changed
+
+- **`vt search` defaults to BM25.** Recall@5 on the paraphrase eval
+  (`evals/retrieval/`): keyword 0.0, BM25 0.868. BM25 is offline and needs no
+  setup; `semantic`/`hybrid` (1.0 / 0.972) stay opt-in via `--mode` because they
+  need an embedding engine. Substring matching is still `--mode keyword`.
+  `--like <id>` no longer needs `--mode`. The library's `searchTasks()` default
+  is unchanged (`keyword`).
+
+### Fixed
+
+- **Frontmatter round trip** (found by the new seeded property test,
+  `src/tests/roundtrip.property.test.ts`):
+  - an empty-string list item (`tags: [""]`) was written as a bare `  - ` and
+    read back as the scalar `"-"`;
+  - a value containing U+2028/U+2029 failed the key regex and the whole key
+    was silently dropped on the next save;
+  - leading/trailing tab, NBSP, BOM or other `String#trim` whitespace was
+    stripped (only plain spaces forced quoting);
+  - a trailing `\r` in a value was lost (`\r` is now quoted and escaped);
+  - a double-converted `\r\r\n` line ending lost one `\r` per save instead of
+    normalising once.
+- **Windows: config path containment.** A `[paths]` dir on another drive
+  (`D:/x`) or a UNC share passed the "must be inside the vault root" check,
+  because `relative()` returns an absolute path there instead of `..`. A dir
+  literally named `..notes` was wrongly rejected on every OS.
+- **Windows: skill placeholders.** `vt install-skills` substituted
+  `{{backlog_dir}}` etc. with backslash paths; they are now `/`-separated.
+- **Windows: `npm test`.** The test glob was not expanded by `cmd.exe` and
+  Node 20 does not glob `--test` args; tests now run via `scripts/run-tests.mjs`.
+
+### Added
+
+- **Retrieval eval** (`npm run eval:retrieval`): 53 labelled paraphrase
+  queries over a 60-task synthetic fixture vault, reporting recall@1/@5 and
+  MRR per search mode. Baseline: BM25 recall@5 0.868, in-process MiniLM
+  semantic 1.000. CI fails if BM25 recall@5 drops more than 0.02 below
+  `evals/retrieval/baseline.json`.
+
+### Changed
+
+- CI runs build and tests on `ubuntu-latest`, `windows-latest` and
+  `macos-latest` (Node 20 and 22).
+
 ## 0.6.0
 
 ### Added

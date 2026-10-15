@@ -29,10 +29,12 @@ jobs:
         run: npx biome ci .
 
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node-version: [20, 22]
 
     steps:
@@ -55,6 +57,9 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Retrieval eval gate (BM25 recall@5 vs evals/retrieval/baseline.json)
+        run: npm run eval:retrieval -- --check
 
       - name: Verify package contents
         run: npm pack --dry-run

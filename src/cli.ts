@@ -22,7 +22,7 @@ Usage: vt <command> [options]
 Commands:
   new <title>           Create a new task
   list                  List tasks
-  search <keyword>      Search tasks by title and body (--mode keyword|bm25|semantic|hybrid, --like <id>, --limit N)
+  search <keyword>      Search tasks, BM25-ranked (--mode bm25|keyword|semantic|hybrid, --like <id>, --limit N)
   stale                 List stale open tasks
   show <id>             Show full task
   done <id>             Mark task as done
@@ -54,8 +54,8 @@ Options (vary by command):
   --json                Machine-readable lint output
   --quiet               Print only the lint SUMMARY line
   --no-suggestions      Skip "did you mean?" suggestions in lint
-  --mode                Search mode: keyword (default), bm25, semantic, or hybrid
-  --like                Find tasks similar to <id> (requires --mode bm25|semantic|hybrid)
+  --mode                Search mode: bm25 (default), keyword, semantic, or hybrid
+  --like                Find tasks similar to <id> (bm25, semantic, or hybrid)
   --limit               Maximum number of search results
   --help, -h            Show this help message
 `;
@@ -345,7 +345,7 @@ async function main(): Promise<void> {
           console.error(
             "Usage:\n" +
               "  vt search <keyword> [--all] [--mode keyword|bm25|semantic|hybrid] [--limit N]\n" +
-              "  vt search --like <id> --mode bm25|semantic|hybrid [--all] [--limit N]"
+              "  vt search --like <id> [--mode bm25|semantic|hybrid] [--all] [--limit N]"
           );
           process.exitCode = 1;
           return;

@@ -7,7 +7,8 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
+import { isInsideRoot } from "../paths.js";
 import type { Task } from "../task.js";
 import type { Embedder } from "./embeddings.js";
 
@@ -51,7 +52,7 @@ export class EmbedCache {
     this.cachePath = join(dir, "embeddings.json");
     // Defense-in-depth: the path is constructed here, but never let it escape the
     // vault root (e.g. if vaultRoot were ever derived from untrusted input).
-    if (relative(vaultRoot, this.cachePath).startsWith("..")) {
+    if (!isInsideRoot(vaultRoot, this.cachePath)) {
       throw new Error("embedding cache path escapes the vault root");
     }
   }

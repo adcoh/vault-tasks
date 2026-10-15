@@ -81,7 +81,8 @@ function rrfFuse(lists: SearchHit[][], limit: number): SearchHit[] {
  *
  * Modes:
  *  - `keyword` (default): substring match on title, body, AND tags, ordered by
- *    priority. Matches the CLI's default behavior so the two surfaces agree.
+ *    priority. Kept as the library default for API stability; the `vt search`
+ *    CLI defaults to `bm25`.
  *  - `bm25`: ranked relevance scoring across title + tags + body.
  *  - `semantic`: cosine similarity over embeddings of the query and corpus.
  *  - `hybrid`: `bm25` and `semantic` fused with Reciprocal Rank Fusion.

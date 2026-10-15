@@ -14,7 +14,8 @@
  */
 
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
-import { join, posix as posixPath, relative, sep } from "node:path";
+import { join, posix as posixPath } from "node:path";
+import { isInsideRoot, toRelPosix } from "../paths.js";
 import { parseFrontmatter } from "../frontmatter.js";
 import { stripTargetSuffixes } from "./resolve.js";
 import type { VaultFile, WikiLink } from "./types.js";
@@ -41,10 +42,6 @@ const EXTERNAL_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
  */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: detecting control characters is the intent
 const CONTROL_CHARS_RE = /[\u0000-\u001f\u007f-\u009f]/;
-
-function toRelPosix(absPath: string, vaultRoot: string): string {
-  return relative(vaultRoot, absPath).split(sep).join("/");
-}
 
 function pathHitsSkipDir(relPosix: string, skipDirs: string[]): boolean {
   for (const d of skipDirs) {
@@ -161,11 +158,9 @@ export function walkMarkdown(
     for (const name of entries) {
       const abs = join(dir, name);
 
-      // Containment check: relative path must not start with `..`. This
-      // is a belt-and-suspenders check — `join()` collapses `..` segments,
-      // so this can only fire for genuinely escaping paths.
-      const rel = toRelPosix(abs, vaultRoot);
-      if (rel.startsWith("../") || rel === "..") {
+      // Containment check — belt-and-suspenders: `join()` collapses `..`
+      // segments, so this can only fire for genuinely escaping paths.
+      if (!isInsideRoot(vaultRoot, abs)) {
         onWarn(`skipping path outside vault root: ${abs}`);
         continue;
       }
@@ -183,7 +178,7 @@ export function walkMarkdown(
         continue;
       }
 
-      if (pathHitsSkipDir(rel, skipDirs)) continue;
+      if (pathHitsSkipDir(toRelPosix(abs, vaultRoot), skipDirs)) continue;
       if (st.isDirectory()) {
         // A git-worktree checkout, never the vault root itself (that case is
         // the initial `recurse(vaultRoot)` call below, which does not pass

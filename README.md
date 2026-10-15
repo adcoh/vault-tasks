@@ -57,7 +57,7 @@ vt done 1
 |---|---|
 | `vt new <title>` | Create a task. Options: `--priority`, `--tags`, `--source`, `--commit` |
 | `vt list` | List open tasks. Options: `--status`, `--priority`, `--tag`, `--all` |
-| `vt search <keyword>` | Search titles and body text. `--all` includes archived. `--mode keyword\|bm25\|semantic\|hybrid`; `--like <id>` finds similar tasks; `--limit N` caps results. See [Semantic search](#semantic-search) |
+| `vt search <keyword>` | Search titles, tags and body text, BM25-ranked. `--all` includes archived. `--mode bm25\|keyword\|semantic\|hybrid` (default `bm25`; `keyword` = exact substring); `--like <id>` finds similar tasks; `--limit N` caps results. See [Semantic search](#semantic-search) |
 | `vt show <id>` | Print full task file |
 | `vt start <id>` | Set status to `in-progress` |
 | `vt done <id>` | Set status to `done` (auto-archives) |
@@ -216,8 +216,8 @@ Available modes:
 
 | Mode | Ranking | Needs an engine? |
 |---|---|---|
-| `keyword` (default) | substring match across title, body, AND tags; priority-sorted | no |
-| `bm25` | BM25 relevance, title-weighted | no |
+| `keyword` (library default) | substring match across title, body, AND tags; priority-sorted | no |
+| `bm25` (`vt search` default) | BM25 relevance, title-weighted | no |
 | `semantic` | cosine similarity over embeddings | yes |
 | `hybrid` | `bm25` + `semantic` fused with Reciprocal Rank Fusion | yes |
 

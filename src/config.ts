@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { isInsideRoot } from "./paths.js";
 
 export const ID_STRATEGIES = ["sequential", "timestamp", "ulid"] as const;
 export type IdStrategy = (typeof ID_STRATEGIES)[number];
@@ -379,7 +380,7 @@ export function loadConfig(startDir?: string): Config {
     [evergreenDir, "evergreen_dir"],
   ];
   for (const [absPath, name] of pathChecks) {
-    if (relative(vaultRoot, absPath).startsWith("..")) {
+    if (!isInsideRoot(vaultRoot, absPath)) {
       throw new Error(`${name} must be inside the vault root`);
     }
   }
@@ -582,7 +583,7 @@ function mergeLintConfig(
   // Making them absolute would break the matching, so they stay as configured.
   const referenceDirRaw = (lint["reference_dir"] as string) ?? DEFAULT_LINT.referenceDir;
   const referenceDir = resolve(vaultRoot, referenceDirRaw);
-  if (relative(vaultRoot, referenceDir).startsWith("..")) {
+  if (!isInsideRoot(vaultRoot, referenceDir)) {
     throw new Error(`reference_dir must be inside the vault root`);
   }
 
