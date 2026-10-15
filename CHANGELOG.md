@@ -6,6 +6,17 @@ All notable changes to this project will be documented here.
 
 ### Fixed
 
+- **Frontmatter round trip** (found by the new seeded property test,
+  `src/tests/roundtrip.property.test.ts`):
+  - an empty-string list item (`tags: [""]`) was written as a bare `  - ` and
+    read back as the scalar `"-"`;
+  - a value containing U+2028/U+2029 failed the key regex and the whole key
+    was silently dropped on the next save;
+  - leading/trailing tab, NBSP, BOM or other `String#trim` whitespace was
+    stripped (only plain spaces forced quoting);
+  - a trailing `\r` in a value was lost (`\r` is now quoted and escaped);
+  - a double-converted `\r\r\n` line ending lost one `\r` per save instead of
+    normalising once.
 - **Windows: config path containment.** A `[paths]` dir on another drive
   (`D:/x`) or a UNC share passed the "must be inside the vault root" check,
   because `relative()` returns an absolute path there instead of `..`. A dir

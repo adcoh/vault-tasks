@@ -389,3 +389,39 @@ Body`;
     assert.equal(typeof parsed["id"], "string");
   });
 });
+
+// Regressions found by roundtrip.property.test.ts.
+describe("round-trip regressions (property-test findings)", () => {
+  const rt = (meta: Record<string, unknown>, body = "") =>
+    parseFrontmatter(writeFrontmatter(meta, body));
+
+  it("keeps an empty-string list item (was parsed as the scalar '-')", () => {
+    assert.deepStrictEqual(rt({ tags: ["", "a"] }).meta, { tags: ["", "a"] });
+    assert.deepStrictEqual(rt({ tags: [""] }).meta, { tags: [""] });
+  });
+
+  it("keeps leading/trailing whitespace that String#trim strips", () => {
+    for (const v of ["\ufeffX", "X\t", "\tX", "X\u00a0", "\u2028X", "X\u3000"]) {
+      assert.equal(rt({ title: v }).meta["title"], v, JSON.stringify(v));
+    }
+  });
+
+  it("does not drop a key whose value contains U+2028/U+2029", () => {
+    assert.deepStrictEqual(rt({ a: "x\u2028y", b: "z" }).meta, { a: "x\u2028y", b: "z" });
+    assert.deepStrictEqual(rt({ tags: ["p\u2029q"] }).meta, { tags: ["p\u2029q"] });
+  });
+
+  it("keeps a carriage return inside or at the end of a value", () => {
+    assert.equal(rt({ title: "a\r" }).meta["title"], "a\r");
+    assert.equal(rt({ title: "a\rb" }).meta["title"], "a\rb");
+    assert.match(writeFrontmatter({ title: "a\r" }, ""), /^title: "a\\r"$/m);
+  });
+
+  it("normalises a double-converted \\r\\r\\n line ending in one pass", () => {
+    const text = "---\ntitle: t\r\r\n---\r\r\nline\r\r\n";
+    const once = parseFrontmatter(text);
+    assert.deepStrictEqual(once, { meta: { title: "t" }, body: "line\n" });
+    const again = parseFrontmatter(writeFrontmatter(once.meta, once.body));
+    assert.deepStrictEqual(again, once);
+  });
+});
