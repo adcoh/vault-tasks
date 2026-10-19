@@ -63,3 +63,16 @@ jobs:
 
       - name: Verify package contents
         run: npm pack --dry-run
+
+  # Keeps the branch-protection contexts "build-and-test (20)" / "(22)" reporting
+  # now that the matrix also spans OSes; green only if every matrix leg passed.
+  build-and-test-required:
+    name: build-and-test (${{ matrix.node-version }})
+    needs: build-and-test
+    if: always()
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - run: test "${{ needs.build-and-test.result }}" = success
