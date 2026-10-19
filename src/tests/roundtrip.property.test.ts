@@ -7,7 +7,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadConfig } from "../config.js";
@@ -96,6 +96,16 @@ function forAll(name: string, prop: (r: () => number, seed: number) => void): vo
   });
 }
 
+/** Run fn in a fresh temp dir, removed even when an assertion throws. */
+function inTmpDir(fn: (dir: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), "vt-prop-"));
+  try {
+    fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 describe("frontmatter round-trip property", () => {
   forAll("parseFrontmatter(writeFrontmatter(meta, body)) returns meta and body", (r, seed) => {
     const meta = genMeta(r);
@@ -124,33 +134,35 @@ describe("frontmatter round-trip property", () => {
 });
 
 describe("task round-trip property (TaskStore)", () => {
-  forAll("create → find returns the same title, tags, source and body", (r, seed) => {
-    const dir = mkdtempSync(join(tmpdir(), "vt-prop-"));
-    const store = new TaskStore(loadConfig(dir));
-    // Empty title falls back to the filename stem by design; exclude it.
-    const title = genString(r) || "t";
-    const opts = { title, tags: genArray(r), source: genString(r), body: genBody(r) };
-    const created = store.create(opts);
-    const found = store.find(created.id);
-    const ctx = `seed=${seed}\n${JSON.stringify(opts)}`;
-    assert.equal(found.title, title, ctx);
-    assert.deepStrictEqual(found.tags, opts.tags, ctx);
-    assert.equal(found.source, opts.source, ctx);
-    assert.equal(found.body, lf(opts.body), ctx);
-  });
+  forAll("create → find returns the same title, tags, source and body", (r, seed) =>
+    inTmpDir((dir) => {
+      const store = new TaskStore(loadConfig(dir));
+      // Empty title falls back to the filename stem by design; exclude it.
+      const title = genString(r) || "t";
+      const opts = { title, tags: genArray(r), source: genString(r), body: genBody(r) };
+      const created = store.create(opts);
+      const found = store.find(created.id);
+      const ctx = `seed=${seed}\n${JSON.stringify(opts)}`;
+      assert.equal(found.title, title, ctx);
+      assert.deepStrictEqual(found.tags, opts.tags, ctx);
+      assert.equal(found.source, opts.source, ctx);
+      assert.equal(found.body, lf(opts.body), ctx);
+    })
+  );
 
-  forAll("update preserves unknown frontmatter fields (extraMeta)", (r, seed) => {
-    const dir = mkdtempSync(join(tmpdir(), "vt-prop-"));
-    const config = loadConfig(dir);
-    const store = new TaskStore(config);
-    const extra = genMeta(r);
-    for (const k of ["title", "status", "priority", "tags", "created", "source"]) delete extra[k];
-    const meta = { title: "x", status: "open", priority: "low", tags: [], ...extra };
-    store.create({ title: "seed" }); // ensures backlog dir + id 0001 exists
-    writeFileSync(join(config.backlogDir, "0002-prop.md"), writeFrontmatter(meta, "body\n"));
-    store.update("0002", { priority: "high" });
-    const found = store.find("0002");
-    assert.deepStrictEqual(found.extraMeta, extra, `seed=${seed}\n${JSON.stringify(meta)}`);
-    assert.equal(found.priority, "high");
-  });
+  forAll("update preserves unknown frontmatter fields (extraMeta)", (r, seed) =>
+    inTmpDir((dir) => {
+      const config = loadConfig(dir);
+      const store = new TaskStore(config);
+      const extra = genMeta(r);
+      for (const k of ["title", "status", "priority", "tags", "created", "source"]) delete extra[k];
+      const meta = { title: "x", status: "open", priority: "low", tags: [], ...extra };
+      store.create({ title: "seed" }); // ensures backlog dir + id 0001 exists
+      writeFileSync(join(config.backlogDir, "0002-prop.md"), writeFrontmatter(meta, "body\n"));
+      store.update("0002", { priority: "high" });
+      const found = store.find("0002");
+      assert.deepStrictEqual(found.extraMeta, extra, `seed=${seed}\n${JSON.stringify(meta)}`);
+      assert.equal(found.priority, "high");
+    })
+  );
 });

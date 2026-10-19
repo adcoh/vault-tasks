@@ -31,12 +31,13 @@ after that it runs offline. Any configured provider works (`--provider ollama
 | mode | recall@1 | recall@5 | MRR |
 |---|---|---|---|
 | keyword | 0.000 | 0.000 | 0.000 |
-| bm25 | 0.811 | 0.868 | 0.840 |
+| bm25 | 0.811 | 0.868 | 0.841 |
 | semantic (all-MiniLM-L6-v2, in-process) | 0.934 | **1.000** | 0.972 |
-| hybrid (bm25 + semantic, RRF) | 0.887 | 0.972 | 0.919 |
+| hybrid (bm25 + semantic, RRF) | 0.887 | 0.972 | 0.920 |
 
 - **`keyword` scores zero by construction**: it is a whole-query substring
-  match, and multi-word paraphrases never occur verbatim. It is the CLI default.
+  match, and multi-word paraphrases never occur verbatim. It remains the
+  library default; the CLI (`vt search`) now defaults to `bm25`.
 - **BM25 misses are vocabulary gaps, not morphology gaps**: excel/CSV,
   toggles/feature flags, exception monitoring/Sentry, paging/alerting, night
   theme/dark mode (where "night" pulls *nightly* backups to the top). A

@@ -9,7 +9,9 @@ description: Outcome-level decision brief for vault-tasks — pulls npm/PyPI dow
 
 Aim the next session at outcomes (people installing, using and reporting on
 `vt`), not at whatever the backlog happens to list. **Read-only**: never edit
-files, comment, label, close, merge, release or publish. Output goes to chat.
+tracked files, comment, label, close, merge, release or publish. Local
+preparation that only touches untracked state (`git fetch`, building the
+gitignored `dist/`) is allowed. Output goes to chat.
 
 ## Steps
 
@@ -17,17 +19,19 @@ files, comment, label, close, merge, release or publish. Output goes to chat.
    ```sh
    git fetch --tags origin            # so release/unreleased numbers are current
    npm run build                      # the eval runs against dist/
-   node scripts/state-of-vt.mjs > "$TMPDIR/state-of-vt.json"
+   node scripts/state-of-vt.mjs > "${TMPDIR:-/tmp}/state-of-vt.json"
    ```
    The script is the source of truth for every number; read the JSON, never
    re-derive figures from memory. A section shaped `{ "error": ... }` is a
    missing source — say which one and carry on.
 
-2. **What changed (last 30 days vs the 30 before).** Downloads per registry
-   (npm `last_30d` vs `prior_30d`; PyPI uses the `no_mirrors` figures), issues
-   opened/closed, PRs merged, CI pass rate on `main`, eval deltas against
-   `baseline.json`, unreleased commits since the latest tag. Show deltas as
-   numbers with a sign, not adjectives.
+2. **What changed.** Compare periods only where the snapshot has both:
+   downloads per registry (npm `last_30d` vs `prior_30d`; PyPI uses the
+   `no_mirrors` figures) and eval deltas against `baseline.json`. Report the
+   rest as current levels, not deltas: open issues, issues closed and PRs
+   merged in the last 30 days, `main_pass_rate` (latest 10 completed runs on
+   `main`), unreleased commits since the latest tag. Show deltas as numbers
+   with a sign, not adjectives.
 
 3. **Why.** For each material change, give the most likely cause and label it
    **known** (traceable to a commit, release date, issue) or **guess**.

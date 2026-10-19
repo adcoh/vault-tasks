@@ -54,7 +54,12 @@ async function evalMode(store, mode, embedder) {
   const totals = { "recall@1": 0, "recall@5": 0, mrr: 0 };
   const misses = [];
   for (const { query, expected } of queries) {
-    const hits = await searchTasks(store, query, { mode, limit: 10, embedder });
+    // Rank every fixture task so MRR is unqualified, not MRR@10.
+    const hits = await searchTasks(store, query, {
+      mode,
+      limit: Number.MAX_SAFE_INTEGER,
+      embedder,
+    });
     const ranked = hits.map((h) => basename(h.task.filePath));
     const s = score(ranked, expected);
     for (const key of Object.keys(totals)) totals[key] += s[key];
