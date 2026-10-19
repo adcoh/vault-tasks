@@ -1,0 +1,6 @@
+# Anchors config discovery for the retrieval-eval fixture vault.
+[paths]
+backlog_dir = "backlog"
+
+[id]
+strategy = "sequential"

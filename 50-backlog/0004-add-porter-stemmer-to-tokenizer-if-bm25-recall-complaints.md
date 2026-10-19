@@ -102,6 +102,15 @@ gap is measurably hurting real users, not preemptively, because:
 - Public BM25Index API stays unchanged — stemming is a tokenizer concern,
   not an index-construction concern.
 
+## Eval evidence (2026-10-15)
+
+`evals/retrieval/` now measures this instead of waiting for complaints. BM25
+recall@5 is 0.868 on 53 paraphrase queries; in-process MiniLM embeddings reach
+1.000. Of BM25's 7 misses, at most one (remind → reminders) is morphological;
+the rest are synonym gaps a stemmer cannot close, and "night" → "nightly" gets
+worse. Before building this, implement it behind the flag and require the eval
+to move. See `evals/retrieval/README.md`.
+
 ## Related
 
 - [[PR-15]] (BM25 module + hostile review)

@@ -23,7 +23,10 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
   const store = new TaskStore(config);
   const includeArchived = args.all === true;
 
-  const requestedMode = args.mode ?? "keyword";
+  // BM25 by default: offline, no setup, and recall@5 0.868 vs keyword's 0.0 on the
+  // paraphrase eval (evals/retrieval). Semantic/hybrid stay opt-in so the default
+  // never depends on a reachable embedding engine.
+  const requestedMode = args.mode ?? "bm25";
   const mode = requestedMode.toLowerCase();
   if (!VALID_MODES.has(mode)) {
     throw new Error(
@@ -44,7 +47,7 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
     }
     if (mode === "keyword") {
       throw new Error(
-        `--like requires --mode bm25, semantic, or hybrid. Keyword mode does substring ` +
+        `--like needs a ranked mode (bm25, semantic, or hybrid). Keyword mode does substring ` +
           `matching, not task similarity. ` +
           `Try: vt search --like '${sanitizeForDisplay(args.like)}' --mode bm25`
       );
@@ -67,7 +70,7 @@ export async function cmdSearch(config: Config, args: SearchArgs): Promise<void>
     throw new Error(
       "Usage:\n" +
         "  vt search <keyword> [--all] [--mode keyword|bm25|semantic|hybrid] [--limit N]\n" +
-        "  vt search --like <id> --mode bm25|semantic|hybrid [--all] [--limit N]"
+        "  vt search --like <id> [--mode bm25|semantic|hybrid] [--all] [--limit N]"
     );
   }
 

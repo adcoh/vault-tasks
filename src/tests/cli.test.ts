@@ -192,11 +192,22 @@ describe("CLI integration", () => {
     assert.ok(!result.stdout.includes("Refactor database migration"));
   });
 
-  it("search --like requires --mode bm25", () => {
+  it("search --like rejects --mode keyword", () => {
     run(["new", "Fix auth bug"], dir);
-    const result = run(["search", "--like", "1"], dir);
+    const result = run(["search", "--like", "1", "--mode", "keyword"], dir);
     assert.equal(result.exitCode, 1);
-    assert.match(result.stderr, /--like requires --mode bm25/);
+    assert.match(result.stderr, /--like needs a ranked mode/);
+  });
+
+  it("search --like with no --mode defaults to bm25", () => {
+    run(["new", "Fix auth redirect bug"], dir);
+    run(["new", "Fix auth callback handling"], dir);
+    run(["new", "Refactor database migration"], dir);
+    const result = run(["search", "--like", "1"], dir);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.ok(result.stdout.includes("SCORE"));
+    assert.ok(result.stdout.includes("Fix auth callback handling"));
+    assert.ok(!result.stdout.includes("Refactor database migration"));
   });
 
   it("search rejects an invalid --mode value", () => {
@@ -286,7 +297,7 @@ describe("CLI integration", () => {
     run(["new", "low auth task", "--priority", "low"], dir);
     run(["new", "another low auth task", "--priority", "low"], dir);
     run(["new", "high auth task", "--priority", "high"], dir);
-    const result = run(["search", "auth", "--limit", "1"], dir);
+    const result = run(["search", "auth", "--mode", "keyword", "--limit", "1"], dir);
     assert.equal(result.exitCode, 0);
     assert.ok(
       result.stdout.includes("high auth task"),
@@ -297,7 +308,7 @@ describe("CLI integration", () => {
   it("search keyword mode matches task tags", () => {
     run(["new", "Refactor module X", "--tags", "backend"], dir);
     run(["new", "Unrelated UI fix", "--tags", "frontend"], dir);
-    const result = run(["search", "backend"], dir);
+    const result = run(["search", "backend", "--mode", "keyword"], dir);
     assert.equal(result.exitCode, 0);
     assert.ok(result.stdout.includes("Refactor module X"));
     assert.ok(!result.stdout.includes("Unrelated UI fix"));
@@ -312,13 +323,50 @@ describe("CLI integration", () => {
     assert.ok(result.stdout.includes("Auth refactor"));
   });
 
-  it("search default mode is byte-identical to the legacy substring behavior", () => {
-    run(["new", "Auth bug fix"], dir);
+  it("search --mode keyword keeps the legacy substring table", () => {
+    run(["new", "Authentication bug fix"], dir);
     run(["new", "UI tweak"], dir);
-    // No --mode flag should produce the legacy table (no SCORE column).
-    const result = run(["search", "auth"], dir);
+    // Substring match ("auth" inside "Authentication"), no SCORE column.
+    const result = run(["search", "auth", "--mode", "keyword"], dir);
     assert.equal(result.exitCode, 0);
+    assert.ok(result.stdout.includes("Authentication bug fix"));
+    assert.ok(!result.stdout.includes("UI tweak"));
     assert.ok(!result.stdout.includes("SCORE"));
+  });
+
+  it("search defaults to bm25: paraphrase query ranks with scores", () => {
+    run(["new", "Fix login redirect loop"], dir);
+    run(["new", "Refactor database migration"], dir);
+    // Keyword mode needs the exact substring "redirect loop login", so it finds
+    // nothing; the bm25 default matches on shared tokens.
+    const result = run(["search", "redirect loop login"], dir);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.ok(result.stdout.includes("SCORE"), result.stdout);
+    assert.ok(result.stdout.includes("Fix login redirect loop"));
+    assert.ok(!result.stdout.includes("Refactor database migration"));
+    const keyword = run(["search", "redirect loop login", "--mode", "keyword"], dir);
+    assert.ok(keyword.stdout.includes("No tasks matching"));
+  });
+
+  it("search default never touches the embedding engine", () => {
+    // An embedding provider that would fail instantly if called (missing API
+    // key). The default must still succeed without semantic setup.
+    writeFileSync(
+      join(dir, ".vault-tasks.toml"),
+      '[paths]\nbacklog_dir = "backlog"\narchive_dir = "archive"\n\n[id]\nstrategy = "sequential"\npad_width = 4\n\n' +
+        '[search]\nembedding_provider = "openai"\nembedding_model = "text-embedding-3-small"\n' +
+        'embedding_dimensions = 1536\nembedding_api_key_env = "VT_TEST_UNSET_KEY"\n'
+    );
+    run(["new", "Fix auth bug"], dir);
+    const result = run(["search", "auth"], dir);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.ok(result.stdout.includes("Fix auth bug"));
+    const like = run(["search", "--like", "1"], dir);
+    assert.equal(like.exitCode, 0, like.stderr);
+    // Sanity: the same config does break semantic, so the test can go red.
+    const semantic = run(["search", "auth", "--mode", "semantic"], dir);
+    assert.equal(semantic.exitCode, 1);
+    assert.match(semantic.stderr, /API key/);
   });
 
   it("done writes status to file and auto-archives", () => {

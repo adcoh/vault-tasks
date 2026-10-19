@@ -29,10 +29,12 @@ jobs:
         run: npx biome ci .
 
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node-version: [20, 22]
 
     steps:
@@ -56,5 +58,21 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Retrieval eval gate (BM25 recall@5 vs evals/retrieval/baseline.json)
+        run: npm run eval:retrieval -- --check
+
       - name: Verify package contents
         run: npm pack --dry-run
+
+  # Keeps the branch-protection contexts "build-and-test (20)" / "(22)" reporting
+  # now that the matrix also spans OSes; green only if every matrix leg passed.
+  build-and-test-required:
+    name: build-and-test (${{ matrix.node-version }})
+    needs: build-and-test
+    if: always()
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - run: test "${{ needs.build-and-test.result }}" = success

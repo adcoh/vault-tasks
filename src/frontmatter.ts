@@ -4,7 +4,8 @@
  *
  * Quoting rules:
  * - String values containing YAML-special characters are double-quoted
- * - Double-quoted values support escape sequences: \\, \", \n, \t
+ * - Double-quoted values support escape sequences: \\, \", \n, \r, \t
+ * - Leading/trailing whitespace (anything String#trim strips) forces quoting
  * - Empty arrays are written as `key: []`
  * - Null/undefined values are omitted
  */
@@ -49,14 +50,16 @@ function yamlQuote(value: string): string {
     /^-?\d+(\.\d+)?$/.test(value) ||
     /^0[xXoObB]/.test(value) ||
     value.startsWith("- ") ||
-    value.startsWith(" ") ||
-    value.endsWith(" ") ||
-    value.includes("\n")
+    // The parser trims unquoted values with String#trim, which also strips
+    // tabs, NBSP, U+2028 and BOM — any of these at an edge must be quoted.
+    /^\s|\s$/.test(value) ||
+    /[\r\n]/.test(value)
   ) {
     const escaped = value
       .replace(/\\/g, "\\\\")
       .replace(/"/g, '\\"')
       .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
       .replace(/\t/g, "\\t");
     return `"${escaped}"`;
   }
@@ -73,6 +76,8 @@ function unquoteValue(raw: string): string {
       switch (ch) {
         case "n":
           return "\n";
+        case "r":
+          return "\r";
         case "t":
           return "\t";
         case '"':
@@ -91,8 +96,9 @@ function unquoteValue(raw: string): string {
 }
 
 export function parseFrontmatter(text: string): { meta: Record<string, unknown>; body: string } {
-  // Normalize CRLF → LF
-  const normalized = text.replace(/\r\n/g, "\n");
+  // Normalize CRLF → LF. `\r+` (not `\r`) so a double-converted `\r\r\n`
+  // also becomes `\n` in one pass; otherwise each save strips one more `\r`.
+  const normalized = text.replace(/\r+\n/g, "\n");
 
   if (!normalized.startsWith("---")) {
     return { meta: {}, body: normalized };
@@ -128,7 +134,7 @@ export function parseFrontmatter(text: string): { meta: Record<string, unknown>;
     // (signaling "value follows on the next lines"). Otherwise an indented
     // continuation like `title: Foo\n  - bar` would silently convert the
     // string scalar into a list and drop the first line.
-    const listMatch = line.match(/^\s*-\s+(.+)$/);
+    const listMatch = line.match(/^\s*-\s+(.+)$/s);
     if (listMatch && currentKey !== null && (currentList !== null || meta[currentKey] === "")) {
       if (currentList === null) {
         currentList = [];
@@ -162,7 +168,9 @@ export function parseFrontmatter(text: string): { meta: Record<string, unknown>;
     }
 
     // Key-value pair — allow dots, hyphens, underscores in keys
-    const kvMatch = line.match(/^([\w][\w.-]*):\s*(.*)$/);
+    // `s` flag: `.` must also match U+2028/U+2029, or a value containing one
+    // fails to match and the whole key is silently dropped.
+    const kvMatch = line.match(/^([\w][\w.-]*):\s*(.*)$/s);
     if (kvMatch) {
       if (currentList !== null) {
         currentList = null;
@@ -210,7 +218,9 @@ export function writeFrontmatter(meta: Record<string, unknown>, body: string): s
       } else {
         lines.push(`${key}:`);
         for (const item of value) {
-          lines.push(`  - ${yamlQuote(String(item))}`);
+          // An empty item must be quoted: a bare `  - ` line is not a list item.
+          const s = String(item);
+          lines.push(`  - ${s === "" ? '""' : yamlQuote(s)}`);
         }
       }
     } else {
